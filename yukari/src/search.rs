@@ -167,22 +167,12 @@ impl<'a> Search<'a> {
             let mut child_pv = ArrayVec::new();
             let eval = eval.clone().update_eval(board, m);
             let board = board.make(m, self.zobrist);
-            let mut score;
+            let mut score = 0;
 
             // Push the move to check for repetition draws
             keystack.push(board.hash());
-            if finding_pv {
-                score = -self.search(
-                    &board,
-                    depth - 1,
-                    -upper_bound,
-                    -lower_bound,
-                    &eval,
-                    &mut child_pv,
-                    mate - 1,
-                    keystack,
-                );
-            } else {
+
+            if !finding_pv {
                 score = -self.search(
                     &board,
                     depth - 1,
@@ -193,18 +183,18 @@ impl<'a> Search<'a> {
                     mate - 1,
                     keystack,
                 );
-                if score > lower_bound {
-                    score = -self.search(
-                        &board,
-                        depth - 1,
-                        -upper_bound,
-                        -lower_bound,
-                        &eval,
-                        &mut child_pv,
-                        mate - 1,
-                        keystack,
-                    );
-                }
+            }
+            if finding_pv || score > lower_bound {
+                score = -self.search(
+                    &board,
+                    depth - 1,
+                    -upper_bound,
+                    -lower_bound,
+                    &eval,
+                    &mut child_pv,
+                    mate - 1,
+                    keystack,
+                );
             }
             keystack.pop();
 

@@ -19,13 +19,13 @@ use tinyvec::ArrayVec;
 pub fn perft(board: &Board, zobrist: &Zobrist, depth: u32) -> u64 {
     if depth == 0 {
         1
-    } /*else if depth == 1 {
+    } else if depth == 1 {
         let moves: [Move; 256] = [Move::default(); 256];
         let mut moves = ArrayVec::from(moves);
         moves.set_len(0);
         board.generate(&mut moves);
         moves.len() as u64
-    }*/ else {
+    } else {
         let moves: [Move; 256] = [Move::default(); 256];
         let mut moves = ArrayVec::from(moves);
         moves.set_len(0);
