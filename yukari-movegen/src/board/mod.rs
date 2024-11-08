@@ -679,9 +679,23 @@ impl Board {
         let pininfo = self.discover_pinned_pieces();
 
         let add_pawn_block = |v: &mut ArrayVec<[Move; 256]>, from, dest, kind| {
+            let promotion_pieces = [Piece::Queen, Piece::Knight, Piece::Rook, Piece::Bishop];
             let Some(colour) = self.data.colour_from_square(from) else { return; };
             if colour == self.side {
-                self.try_push_move(v, from, dest, kind, None, &pininfo);
+                if Rank::from(dest).is_relative_eighth(self.side) {
+                    for piece in &promotion_pieces {
+                        self.try_push_move(
+                            v,
+                            from,
+                            dest,
+                            MoveType::Promotion,
+                            Some(*piece),
+                            &pininfo,
+                        );
+                    }
+                } else {
+                    self.try_push_move(v, from, dest, kind, None, &pininfo);
+                }
             }
         };
 
