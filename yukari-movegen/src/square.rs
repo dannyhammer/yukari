@@ -587,10 +587,7 @@ impl TryFrom<u8> for Square {
     type Error = ();
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(Self::from_rank_file(
-            Rank::try_from(value / 8)?,
-            File::try_from(value % 8)?,
-        ))
+        Ok(Self::from_rank_file(Rank::try_from(value / 8)?, File::try_from(value % 8)?))
     }
 }
 
@@ -791,10 +788,7 @@ impl Direction {
 
     /// Returns true if the direction is diagonal.
     pub const fn diagonal(self) -> bool {
-        matches!(
-            self,
-            Self::NorthEast | Self::SouthEast | Self::SouthWest | Self::NorthWest
-        )
+        matches!(self, Self::NorthEast | Self::SouthEast | Self::SouthWest | Self::NorthWest)
     }
 
     /// Return true if the direction is orthogonal.
@@ -804,9 +798,8 @@ impl Direction {
 
     /// Returns the 16x8 square difference of this Direction.
     pub const fn to_16x8(self) -> i16 {
-        const VECTORS: [i16; 16] = [
-            16, 33, 17, 18, 1, -14, -15, -31, -16, -33, -17, -18, -1, 14, 15, 31,
-        ];
+        const VECTORS: [i16; 16] =
+            [16, 33, 17, 18, 1, -14, -15, -31, -16, -33, -17, -18, -1, 14, 15, 31];
         VECTORS[self as usize]
     }
 
@@ -903,9 +896,8 @@ impl Iterator for KingIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         use Direction::{East, North, NorthEast, NorthWest, South, SouthEast, SouthWest, West};
-        const KING_DIR: [Direction; 8] = [
-            North, NorthEast, East, SouthEast, South, SouthWest, West, NorthWest,
-        ];
+        const KING_DIR: [Direction; 8] =
+            [North, NorthEast, East, SouthEast, South, SouthWest, West, NorthWest];
 
         loop {
             if self.1 >= 8 {

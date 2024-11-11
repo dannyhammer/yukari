@@ -41,20 +41,12 @@ impl Move {
         from: Square, dest: Square, kind: MoveType, promotion_piece: Option<Piece>,
     ) -> Self {
         //assert!(dest != from);
-        Self {
-            from,
-            dest,
-            kind,
-            prom: promotion_piece,
-        }
+        Self { from, dest, kind, prom: promotion_piece }
     }
 
     #[must_use]
     pub const fn is_capture(&self) -> bool {
-        matches!(
-            self.kind,
-            MoveType::Capture | MoveType::CapturePromotion | MoveType::EnPassant
-        )
+        matches!(self.kind, MoveType::Capture | MoveType::CapturePromotion | MoveType::EnPassant)
     }
 }
 

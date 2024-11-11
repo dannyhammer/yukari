@@ -27,22 +27,13 @@ fn main() {
         pv.set_len(0);
         let score = s.search_root(&board, depth, &mut pv, &mut keystack);
         let now = Instant::now().duration_since(start);
-        print!(
-            "{} {:.2} {} {} ",
-            depth,
-            score,
-            now.as_millis() / 10,
-            s.nodes() + s.qnodes()
-        );
+        print!("{} {:.2} {} {} ", depth, score, now.as_millis() / 10, s.nodes() + s.qnodes());
         for m in pv {
             print!("{} ", m);
         }
         println!();
     }
-    println!(
-        "# QS: {:.3}%",
-        (100 * s.qnodes()) as f64 / (s.nodes() as f64 + s.qnodes() as f64)
-    );
+    println!("# QS: {:.3}%", (100 * s.qnodes()) as f64 / (s.nodes() as f64 + s.qnodes() as f64));
     println!(
         "# Branching factor: {:.3} (AB); {:.3} (QS); {:.3} overall",
         (s.nodes() as f64).powf(0.1),

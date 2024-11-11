@@ -157,11 +157,7 @@ pub struct EvalState {
 
 impl EvalState {
     pub const fn new() -> Self {
-        Self {
-            pst_mg: 0,
-            pst_eg: 0,
-            phase: 0,
-        }
+        Self { pst_mg: 0, pst_eg: 0, phase: 0 }
     }
 
     pub fn eval(board: &Board) -> Self {

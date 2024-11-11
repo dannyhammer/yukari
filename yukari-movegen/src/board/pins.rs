@@ -12,10 +12,7 @@ pub struct PinInfo {
 
 impl Default for PinInfo {
     fn default() -> Self {
-        Self {
-            pins: [None; 32],
-            enpassant_pinned: Bitlist::new(),
-        }
+        Self { pins: [None; 32], enpassant_pinned: Bitlist::new() }
     }
 }
 

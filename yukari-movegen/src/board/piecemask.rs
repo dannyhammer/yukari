@@ -10,11 +10,7 @@ pub struct Piecemask {
 
 impl Piecemask {
     pub const fn new() -> Self {
-        Self {
-            pbq: Bitlist::new(),
-            nbk: Bitlist::new(),
-            rqk: Bitlist::new(),
-        }
+        Self { pbq: Bitlist::new(), nbk: Bitlist::new(), rqk: Bitlist::new() }
     }
 
     pub const fn empty(&self) -> Bitlist {

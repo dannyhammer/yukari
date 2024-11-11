@@ -174,10 +174,7 @@ impl Iterator for BitlistIter {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        (
-            self.0.count_ones() as usize,
-            Some(self.0.count_ones() as usize),
-        )
+        (self.0.count_ones() as usize, Some(self.0.count_ones() as usize))
     }
 }
 

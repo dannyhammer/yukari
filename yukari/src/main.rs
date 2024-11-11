@@ -80,9 +80,7 @@ impl Yukari {
         let mut moves = ArrayVec::from(moves);
         moves.set_len(0);
         self.board.generate(&mut moves);
-        moves
-            .into_iter()
-            .find(|&m| m.from == from && m.dest == dest && m.prom == prom)
+        moves.into_iter().find(|&m| m.from == from && m.dest == dest && m.prom == prom)
     }
 
     /// Real search, falls back to dumb search in extreme time constraints
@@ -105,13 +103,7 @@ impl Yukari {
             // If we have a pv that's not just empty from bailing out use that as our best moves
             best_pv.clone_from(&pv);
             let now = Instant::now().duration_since(start);
-            print!(
-                "{} {:.2} {} {} ",
-                depth,
-                score,
-                now.as_millis() / 10,
-                s.nodes() + s.qnodes()
-            );
+            print!("{} {:.2} {} {} ", depth, score, now.as_millis() / 10, s.nodes() + s.qnodes());
             for m in &pv {
                 print!("{m} ");
             }
@@ -195,11 +187,7 @@ impl Yukari {
             pv.set_len(0);
             let score = s.search_root(&board, 8, &mut pv, &mut keystack);
             let now = Instant::now().duration_since(start);
-            print!(
-                "10 {score:.2} {} {} ",
-                now.as_millis() / 10,
-                s.nodes() + s.qnodes()
-            );
+            print!("10 {score:.2} {} {} ", now.as_millis() / 10, s.nodes() + s.qnodes());
             for m in pv {
                 print!("{m} ");
             }

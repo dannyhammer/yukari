@@ -3,11 +3,9 @@ use yukari_movegen::{perft, Board, Move, MoveType, Square, Zobrist};
 
 pub fn makemove_bench(c: &mut Criterion) {
     let zobrist = Zobrist::new();
-    let startpos = Board::from_fen(
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        &zobrist,
-    )
-    .unwrap();
+    let startpos =
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", &zobrist)
+            .unwrap();
     let kiwipete = Board::from_fen(
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
         &zobrist,
@@ -51,11 +49,9 @@ pub fn makemove_bench(c: &mut Criterion) {
 
 pub fn perft_bench(c: &mut Criterion) {
     let zobrist = Zobrist::new();
-    let board = Board::from_fen(
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        &zobrist,
-    )
-    .unwrap();
+    let board =
+        Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", &zobrist)
+            .unwrap();
 
     let mut group = c.benchmark_group("perft");
 

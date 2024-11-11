@@ -25,14 +25,7 @@ pub struct Search<'a> {
 impl<'a> Search<'a> {
     #[must_use]
     pub const fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist) -> Self {
-        Self {
-            nodes: 0,
-            qnodes: 0,
-            nullmove_attempts: 0,
-            nullmove_success: 0,
-            stop_after,
-            zobrist,
-        }
+        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist }
     }
 
     fn quiesce(
@@ -218,9 +211,7 @@ impl<'a> Search<'a> {
         keystack: &mut Vec<u64>,
     ) -> i32 {
         let eval = EvalState::eval(board);
-        self.search(
-            board, depth, -100_000, 100_000, &eval, pv, MATE_VALUE, keystack,
-        )
+        self.search(board, depth, -100_000, 100_000, &eval, pv, MATE_VALUE, keystack)
     }
 
     #[must_use]

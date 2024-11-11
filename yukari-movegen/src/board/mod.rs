@@ -60,12 +60,7 @@ impl Zobrist {
             *castle_flag = rng.gen();
         }
 
-        Self {
-            piece,
-            side,
-            ep,
-            castling,
-        }
+        Self { piece, side, ep, castling }
     }
 }
 
@@ -103,10 +98,8 @@ impl Display for Board {
             let j = i ^ 56_u8;
 
             if let (Some(piece), Some(colour)) = (
-                self.data
-                    .piece_from_square(j.try_into().expect("square somehow out of bounds")),
-                self.data
-                    .colour_from_square(j.try_into().expect("square somehow out of bounds")),
+                self.data.piece_from_square(j.try_into().expect("square somehow out of bounds")),
+                self.data.colour_from_square(j.try_into().expect("square somehow out of bounds")),
             ) {
                 let c = match piece {
                     Piece::Pawn => 'P',
@@ -176,11 +169,7 @@ impl Board {
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn startpos(zobrist: &Zobrist) -> Self {
-        Self::from_fen(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            zobrist,
-        )
-        .unwrap()
+        Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", zobrist).unwrap()
     }
 
     /// Check if this board is illegal by seeing if the enemy king is attacked by friendly pieces.
@@ -196,11 +185,7 @@ impl Board {
             return true;
         }
         // The opponent's king should not be in check.
-        if !self
-            .data
-            .attacks_to(self.data.king_square(!self.side), self.side)
-            .empty()
-        {
+        if !self.data.attacks_to(self.data.king_square(!self.side), self.side).empty() {
             return true;
         }
         false
@@ -249,11 +234,7 @@ impl Board {
                         _ => return None,
                     };
 
-                    let colour = if c.is_ascii_uppercase() {
-                        Colour::White
-                    } else {
-                        Colour::Black
-                    };
+                    let colour = if c.is_ascii_uppercase() { Colour::White } else { Colour::Black };
 
                     let square =
                         Square::from_rank_file(rank.try_into().unwrap(), file.try_into().unwrap());
@@ -360,10 +341,8 @@ impl Board {
                 b.set_ep(zobrist, m.from.relative_north(b.side));
             }
             MoveType::Capture => {
-                let piece_index = b
-                    .data
-                    .piece_index(m.dest)
-                    .expect("attempted to capture an empty square");
+                let piece_index =
+                    b.data.piece_index(m.dest).expect("attempted to capture an empty square");
                 let moving_piece = b.piece_from_square(m.from).unwrap() as usize;
                 let captured_piece = b.piece_from_square(m.dest).unwrap() as usize;
                 b.data.remove_piece(piece_index, true);
@@ -571,39 +550,27 @@ impl Board {
 
         let add_pawn_block = |v: &mut ArrayVec<[Move; 256]>, from, dest, kind| {
             let promotion_pieces = [Piece::Queen, Piece::Knight, Piece::Rook, Piece::Bishop];
-            let Some(colour) = self.data.colour_from_square(from) else {
+            let Some(colour) = self.data.colour_from_square(from) else { return };
+            if colour != self.side {
                 return;
-            };
-            if colour == self.side {
-                if Rank::from(dest).is_relative_eighth(self.side) {
-                    for piece in &promotion_pieces {
-                        self.try_push_move(
-                            v,
-                            from,
-                            dest,
-                            MoveType::Promotion,
-                            Some(*piece),
-                            &pininfo,
-                        );
-                    }
-                } else {
-                    self.try_push_move(v, from, dest, kind, None, &pininfo);
-                }
+            }
+            if !Rank::from(dest).is_relative_eighth(self.side) {
+                self.try_push_move(v, from, dest, kind, None, &pininfo);
+                return;
+            }
+            for piece in &promotion_pieces {
+                self.try_push_move(v, from, dest, MoveType::Promotion, Some(*piece), &pininfo);
             }
         };
 
         let add_pawn_blocks = |v: &mut ArrayVec<[Move; 256]>, dest: Square| {
-            let Some(from) = dest.relative_south(self.side) else {
-                return;
-            };
+            let Some(from) = dest.relative_south(self.side) else { return };
             match self.data.piece_from_square(from) {
                 Some(Piece::Pawn) => add_pawn_block(v, from, dest, MoveType::Normal),
                 Some(_) => {}
                 None => {
                     if Rank::from(dest).is_relative_fourth(self.side) {
-                        let Some(from) = from.relative_south(self.side) else {
-                            return;
-                        };
+                        let Some(from) = from.relative_south(self.side) else { return };
                         if self.data.piece_from_square(from) == Some(Piece::Pawn) {
                             add_pawn_block(v, from, dest, MoveType::DoublePush);
                         }
@@ -894,13 +861,8 @@ impl Board {
                 let from = self.data.square_of_piece(capturer);
                 if Rank::from(dest).is_relative_eighth(self.side) {
                     for piece in &promotion_pieces {
-                        if !try_move(
-                            from,
-                            dest,
-                            MoveType::CapturePromotion,
-                            Some(*piece),
-                            &pininfo,
-                        ) {
+                        if !try_move(from, dest, MoveType::CapturePromotion, Some(*piece), &pininfo)
+                        {
                             return false;
                         }
                     }
@@ -1057,11 +1019,7 @@ impl Board {
             }
 
             // For every piece that attacks this square, find its location and add it to the move list.
-            for attacker in self
-                .data
-                .attacks_to(dest, self.side)
-                .and(!self.data.pawns())
-            {
+            for attacker in self.data.attacks_to(dest, self.side).and(!self.data.pawns()) {
                 // It's illegal for kings to move to attacked squares; prune those out.
                 if self.data.piece_from_bit(attacker) == Piece::King
                     && !self.data.attacks_to(dest, !self.side).empty()
@@ -1184,10 +1142,7 @@ impl Board {
 
     #[must_use]
     pub fn in_check(&self) -> bool {
-        !self
-            .data
-            .attacks_to(self.data.king_square(self.side), !self.side)
-            .empty()
+        !self.data.attacks_to(self.data.king_square(self.side), !self.side).empty()
     }
 
     #[must_use]
@@ -1248,11 +1203,7 @@ mod test {
         // Make each move
         for (i, &m) in moves.iter().enumerate() {
             board = make_move(&board, &zobrist, m);
-            assert_eq!(
-                board.hash,
-                fresh_hash(&board, &zobrist),
-                "Failed testing move #{i} ({m})"
-            );
+            assert_eq!(board.hash, fresh_hash(&board, &zobrist), "Failed testing move #{i} ({m})");
         }
     }
 

@@ -47,11 +47,9 @@ mod perft {
     #[test]
     fn perft_test1() {
         let zobrist = Zobrist::new();
-        let startpos = Board::from_fen(
-            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-            &zobrist,
-        )
-        .unwrap();
+        let startpos =
+            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", &zobrist)
+                .unwrap();
         assert_eq!(perft(&startpos, &zobrist, 1), 20);
         assert_eq!(perft(&startpos, &zobrist, 2), 400);
         assert_eq!(perft(&startpos, &zobrist, 3), 8902);

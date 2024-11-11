@@ -70,11 +70,7 @@ fn main() {
         pv.set_len(0);
         let score = s.search_root(&board, 8, &mut pv, &mut keystack);
         let now = Instant::now().duration_since(start);
-        print!(
-            "10 {score:.2} {} {} ",
-            now.as_millis() / 10,
-            s.nodes() + s.qnodes()
-        );
+        print!("10 {score:.2} {} {} ", now.as_millis() / 10, s.nodes() + s.qnodes());
         for m in pv {
             print!("{m} ");
         }

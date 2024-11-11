@@ -106,10 +106,7 @@ impl FromStr for TimeMode {
                     // Incremental
                     // In incremental we need the increment to add after each move
                     let inc = f32::from_str(args[2]).map_err(|_| ())?;
-                    Ok(Self::Incremental {
-                        base,
-                        increment: inc,
-                    })
+                    Ok(Self::Incremental { base, increment: inc })
                 } else {
                     // Classical
                     // In classical we already know the increment is zero
