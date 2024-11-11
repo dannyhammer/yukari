@@ -1,9 +1,10 @@
-use crate::{colour::Colour, square::Square};
 use std::{
     convert::TryFrom,
     num::NonZeroU8,
     ops::{Index, IndexMut},
 };
+
+use crate::{colour::Colour, square::Square};
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -103,10 +104,7 @@ impl PieceIndexArray {
 
     /// Move a piece from
     pub fn move_piece(
-        &mut self,
-        piece_index: PieceIndex,
-        from_square: Square,
-        dest_square: Square,
+        &mut self, piece_index: PieceIndex, from_square: Square, dest_square: Square,
     ) {
         self[from_square] = None;
         self[dest_square] = Some(piece_index);

@@ -36,11 +36,7 @@ impl<'a> Search<'a> {
     }
 
     fn quiesce(
-        &mut self,
-        board: &Board,
-        mut alpha: i32,
-        beta: i32,
-        eval: &EvalState,
+        &mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState,
         pv: &mut ArrayVec<[Move; 32]>,
     ) -> i32 {
         let eval_int = eval.get(board.side());
@@ -89,15 +85,8 @@ impl<'a> Search<'a> {
 
     #[allow(clippy::too_many_arguments)]
     fn search(
-        &mut self,
-        board: &Board,
-        mut depth: i32,
-        mut lower_bound: i32,
-        upper_bound: i32,
-        eval: &EvalState,
-        pv: &mut ArrayVec<[Move; 32]>,
-        mate: i32,
-        keystack: &mut Vec<u64>,
+        &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32,
+        eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>, mate: i32, keystack: &mut Vec<u64>,
     ) -> i32 {
         // Check extension
         if board.in_check() {
@@ -225,10 +214,7 @@ impl<'a> Search<'a> {
     }
 
     pub fn search_root(
-        &mut self,
-        board: &Board,
-        depth: i32,
-        pv: &mut ArrayVec<[Move; 32]>,
+        &mut self, board: &Board, depth: i32, pv: &mut ArrayVec<[Move; 32]>,
         keystack: &mut Vec<u64>,
     ) -> i32 {
         let eval = EvalState::eval(board);

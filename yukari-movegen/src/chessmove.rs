@@ -1,8 +1,9 @@
+use std::fmt::Display;
+
 use crate::{
     piece::Piece,
     square::{File, Rank, Square},
 };
-use std::fmt::Display;
 
 #[derive(Copy, Clone, Default, PartialEq, Eq)]
 pub struct Move {
@@ -37,10 +38,7 @@ impl Move {
     /// Create a new Move.
     #[must_use]
     pub const fn new(
-        from: Square,
-        dest: Square,
-        kind: MoveType,
-        promotion_piece: Option<Piece>,
+        from: Square, dest: Square, kind: MoveType, promotion_piece: Option<Piece>,
     ) -> Self {
         //assert!(dest != from);
         Self {

@@ -1,8 +1,8 @@
+use std::time::Instant;
+
 use tinyvec::ArrayVec;
 use yukari::Search;
 use yukari_movegen::{Board, Zobrist};
-
-use std::time::Instant;
 
 fn main() {
     let fen = &std::env::args()

@@ -1,10 +1,10 @@
-use super::index::PieceIndex;
-use crate::{colour::Colour, square::Square};
 use std::{
     fmt::Debug,
     iter::FusedIterator,
     ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign, Index, Not},
 };
+
+use crate::{board::index::PieceIndex, colour::Colour, square::Square};
 
 /// A set of 32 bits, each representing a piece.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -153,8 +153,8 @@ impl Not for Bitlist {
 }
 
 impl IntoIterator for Bitlist {
-    type Item = PieceIndex;
     type IntoIter = BitlistIter;
+    type Item = PieceIndex;
 
     fn into_iter(self) -> Self::IntoIter {
         BitlistIter(self)

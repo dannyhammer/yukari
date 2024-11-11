@@ -1,9 +1,3 @@
-use crate::{
-    chessmove::{Move, MoveType},
-    colour::Colour,
-    piece::Piece,
-    square::{File, Rank, Square, Square16x8},
-};
 use std::{
     convert::{TryFrom, TryInto},
     ffi::CString,
@@ -12,6 +6,13 @@ use std::{
 
 use rand::{prelude::StdRng, Rng, SeedableRng};
 use tinyvec::ArrayVec;
+
+use crate::{
+    chessmove::{Move, MoveType},
+    colour::Colour,
+    piece::Piece,
+    square::{File, Rank, Square, Square16x8},
+};
 
 mod bitlist;
 mod data;
@@ -492,13 +493,8 @@ impl Board {
     }
 
     fn try_push_move(
-        &self,
-        v: &mut ArrayVec<[Move; 256]>,
-        from: Square,
-        dest: Square,
-        kind: MoveType,
-        promotion_piece: Option<Piece>,
-        pininfo: &pins::PinInfo,
+        &self, v: &mut ArrayVec<[Move; 256]>, from: Square, dest: Square, kind: MoveType,
+        promotion_piece: Option<Piece>, pininfo: &pins::PinInfo,
     ) {
         if let Some(dir) = pininfo.pins[self.data.piece_index(from).unwrap().into_inner() as usize]
         {
@@ -532,10 +528,7 @@ impl Board {
 
     /// Generate pawn-specific quiet moves.
     fn generate_pawn_quiet(
-        &self,
-        v: &mut ArrayVec<[Move; 256]>,
-        from: Square,
-        pininfo: &pins::PinInfo,
+        &self, v: &mut ArrayVec<[Move; 256]>, from: Square, pininfo: &pins::PinInfo,
     ) {
         let promotion_pieces = [Piece::Queen, Piece::Knight, Piece::Rook, Piece::Bishop];
         let north = from.relative_north(self.side);

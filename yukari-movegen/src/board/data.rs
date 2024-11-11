@@ -194,11 +194,7 @@ impl BoardData {
 
     /// Add or remove attacks for a square.
     fn update_attacks(
-        &mut self,
-        square: Square,
-        bit: PieceIndex,
-        piece: Piece,
-        add: bool,
+        &mut self, square: Square, bit: PieceIndex, piece: Piece, add: bool,
         skip_dir: Option<Direction>,
     ) {
         let update = |bitlist: &mut BitlistArray, dest: Square| {

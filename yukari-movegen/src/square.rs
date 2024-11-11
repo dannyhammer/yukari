@@ -1,10 +1,11 @@
-use crate::{colour::Colour, piece::Piece};
 use std::{
     convert::TryFrom,
     fmt::{Debug, Display},
     num::NonZeroU8,
     str::FromStr,
 };
+
+use crate::{colour::Colour, piece::Piece};
 
 const DIRECTIONS: [Option<Direction>; 240] = [
     Some(Direction::SouthWest),

@@ -1,9 +1,15 @@
-use std::io::{self};
-use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::{
+    io::{self},
+    str::FromStr,
+    time::{Duration, Instant},
+};
+
 use tinyvec::ArrayVec;
-use yukari::engine::{TimeControl, TimeMode};
-use yukari::{self, is_repetition_draw, Search};
+use yukari::{
+    self,
+    engine::{TimeControl, TimeMode},
+    is_repetition_draw, Search,
+};
 use yukari_movegen::{Board, Move, Piece, Square, Zobrist};
 
 #[derive(Clone, Copy, Debug)]

@@ -1,6 +1,8 @@
-use crate::board::{bitlist::Bitlist, Board};
-use crate::square::{Direction, Square16x8};
-use crate::Piece;
+use crate::{
+    board::{bitlist::Bitlist, Board},
+    square::{Direction, Square16x8},
+    Piece,
+};
 
 /// Pin information in a board.
 pub struct PinInfo {
