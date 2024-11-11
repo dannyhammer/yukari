@@ -78,9 +78,5 @@ fn main() {
         nodes += s.nodes() + s.qnodes();
     }
     let now = Instant::now().duration_since(start);
-    println!(
-        "{nodes} nodes in {:.3}s = {:.0} nodes/s",
-        now.as_secs_f64(),
-        (nodes as f64) / now.as_secs_f64()
-    );
+    println!("{nodes} nodes in {:.3}s = {:.0} nodes/s", now.as_secs_f64(), (nodes as f64) / now.as_secs_f64());
 }

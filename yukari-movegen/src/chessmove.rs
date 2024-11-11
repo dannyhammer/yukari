@@ -19,11 +19,7 @@ impl Display for Move {
         let from_rank: u8 = b'1' + u8::from(Rank::from(self.from));
         let dest_file: u8 = b'a' + u8::from(File::from(self.dest));
         let dest_rank: u8 = b'1' + u8::from(Rank::from(self.dest));
-        write!(
-            f,
-            "{}{}{}{}",
-            from_file as char, from_rank as char, dest_file as char, dest_rank as char
-        )?;
+        write!(f, "{}{}{}{}", from_file as char, from_rank as char, dest_file as char, dest_rank as char)?;
 
         if let Some(prom) = self.prom {
             static PROMOTE_CHAR: [char; 6] = ['p', 'n', 'b', 'r', 'q', 'k'];
@@ -37,9 +33,7 @@ impl Display for Move {
 impl Move {
     /// Create a new Move.
     #[must_use]
-    pub const fn new(
-        from: Square, dest: Square, kind: MoveType, promotion_piece: Option<Piece>,
-    ) -> Self {
+    pub const fn new(from: Square, dest: Square, kind: MoveType, promotion_piece: Option<Piece>) -> Self {
         //assert!(dest != from);
         Self { from, dest, kind, prom: promotion_piece }
     }

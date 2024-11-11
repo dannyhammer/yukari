@@ -47,9 +47,7 @@ mod perft {
     #[test]
     fn perft_test1() {
         let zobrist = Zobrist::new();
-        let startpos =
-            Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", &zobrist)
-                .unwrap();
+        let startpos = Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", &zobrist).unwrap();
         assert_eq!(perft(&startpos, &zobrist, 1), 20);
         assert_eq!(perft(&startpos, &zobrist, 2), 400);
         assert_eq!(perft(&startpos, &zobrist, 3), 8902);
@@ -61,11 +59,7 @@ mod perft {
     #[test]
     fn perft_test2() {
         let zobrist = Zobrist::new();
-        let startpos = Board::from_fen(
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-            &zobrist,
-        )
-        .unwrap();
+        let startpos = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", &zobrist).unwrap();
         assert_eq!(perft(&startpos, &zobrist, 1), 48);
         assert_eq!(perft(&startpos, &zobrist, 2), 2039);
         assert_eq!(perft(&startpos, &zobrist, 3), 97862);
@@ -1620,8 +1614,7 @@ mod perft {
     #[test]
     fn perft_test122() {
         let zobrist = Zobrist::new();
-        let startpos =
-            Board::from_fen("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N w - - 0 1", &zobrist).unwrap();
+        let startpos = Board::from_fen("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N w - - 0 1", &zobrist).unwrap();
 
         assert_eq!(perft(&startpos, &zobrist, 1), 24);
         assert_eq!(perft(&startpos, &zobrist, 2), 496);
@@ -1673,8 +1666,7 @@ mod perft {
     #[test]
     fn perft_test126() {
         let zobrist = Zobrist::new();
-        let startpos =
-            Board::from_fen("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1", &zobrist).unwrap();
+        let startpos = Board::from_fen("n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1", &zobrist).unwrap();
 
         assert_eq!(perft(&startpos, &zobrist, 1), 24);
         assert_eq!(perft(&startpos, &zobrist, 2), 496);

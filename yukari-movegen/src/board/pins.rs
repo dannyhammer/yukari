@@ -87,8 +87,7 @@ impl PinInfo {
                     // If at least one of the blockers is a piece, we don't need to worry about en-passant.
                     if board.data.piece_from_bit(friendly_blocker) != Piece::Pawn
                         || board.data.piece_from_bit(enemy_blocker) != Piece::Pawn
-                        || (pinner_king_dir != Direction::East
-                            && pinner_king_dir != Direction::West)
+                        || (pinner_king_dir != Direction::East && pinner_king_dir != Direction::West)
                     {
                         continue;
                     }

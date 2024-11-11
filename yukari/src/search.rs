@@ -28,10 +28,7 @@ impl<'a> Search<'a> {
         Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist }
     }
 
-    fn quiesce(
-        &mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState,
-        pv: &mut ArrayVec<[Move; 32]>,
-    ) -> i32 {
+    fn quiesce(&mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>) -> i32 {
         let eval_int = eval.get(board.side());
 
         pv.set_len(0);
@@ -78,8 +75,8 @@ impl<'a> Search<'a> {
 
     #[allow(clippy::too_many_arguments)]
     fn search(
-        &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32,
-        eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>, mate: i32, keystack: &mut Vec<u64>,
+        &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32, eval: &EvalState,
+        pv: &mut ArrayVec<[Move; 32]>, mate: i32, keystack: &mut Vec<u64>,
     ) -> i32 {
         // Check extension
         if board.in_check() {
@@ -96,16 +93,7 @@ impl<'a> Search<'a> {
             keystack.push(board.hash());
             let board = board.make_null(self.zobrist);
             let mut child_pv = ArrayVec::new();
-            let score = -self.search(
-                &board,
-                depth - 1 - R,
-                -upper_bound,
-                -upper_bound + 1,
-                eval,
-                &mut child_pv,
-                mate,
-                keystack,
-            );
+            let score = -self.search(&board, depth - 1 - R, -upper_bound, -upper_bound + 1, eval, &mut child_pv, mate, keystack);
             keystack.pop();
 
             self.nullmove_attempts += 1;
@@ -154,28 +142,10 @@ impl<'a> Search<'a> {
             keystack.push(board.hash());
 
             if !finding_pv {
-                score = -self.search(
-                    &board,
-                    depth - 1,
-                    -lower_bound - 1,
-                    -lower_bound,
-                    &eval,
-                    &mut child_pv,
-                    mate - 1,
-                    keystack,
-                );
+                score = -self.search(&board, depth - 1, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, mate - 1, keystack);
             }
             if finding_pv || score > lower_bound {
-                score = -self.search(
-                    &board,
-                    depth - 1,
-                    -upper_bound,
-                    -lower_bound,
-                    &eval,
-                    &mut child_pv,
-                    mate - 1,
-                    keystack,
-                );
+                score = -self.search(&board, depth - 1, -upper_bound, -lower_bound, &eval, &mut child_pv, mate - 1, keystack);
             }
             keystack.pop();
 
@@ -206,10 +176,7 @@ impl<'a> Search<'a> {
         lower_bound
     }
 
-    pub fn search_root(
-        &mut self, board: &Board, depth: i32, pv: &mut ArrayVec<[Move; 32]>,
-        keystack: &mut Vec<u64>,
-    ) -> i32 {
+    pub fn search_root(&mut self, board: &Board, depth: i32, pv: &mut ArrayVec<[Move; 32]>, keystack: &mut Vec<u64>) -> i32 {
         let eval = EvalState::eval(board);
         self.search(board, depth, -100_000, 100_000, &eval, pv, MATE_VALUE, keystack)
     }

@@ -110,14 +110,8 @@ impl Yukari {
             println!();
             depth += 1;
         }
-        println!(
-            "# QS: {:.3}%",
-            (100 * s.qnodes()) as f64 / (s.nodes() as f64 + s.qnodes() as f64)
-        );
-        println!(
-            "# Branching factor: {:.3}",
-            ((s.nodes() + s.qnodes()) as f64).powf(1.0 / f64::from(depth))
-        );
+        println!("# QS: {:.3}%", (100 * s.qnodes()) as f64 / (s.nodes() as f64 + s.qnodes() as f64));
+        println!("# Branching factor: {:.3}", ((s.nodes() + s.qnodes()) as f64).powf(1.0 / f64::from(depth)));
         self.tc.increment_moves();
     }
 
@@ -163,8 +157,8 @@ impl Yukari {
             "8/8/8/5N2/8/p7/8/2NK3k w - - 0 1",   // Na2 - mate
             "8/3k4/8/8/8/4B3/4KB2/2B5 w - - 0 1", // draw
             // 6-man positions
-            "8/8/1P6/5pr1/8/4R3/7k/2K5 w - - 0 1", // Re5 - mate
-            "8/2p4P/8/kr6/6R1/8/8/1K6 w - - 0 1",  // Ka2 - mate
+            "8/8/1P6/5pr1/8/4R3/7k/2K5 w - - 0 1",  // Re5 - mate
+            "8/2p4P/8/kr6/6R1/8/8/1K6 w - - 0 1",   // Ka2 - mate
             "8/8/3P3k/8/1p6/8/1P6/1K3n2 b - - 0 1", // Nd2 - draw
             // 7-man positions
             "8/R7/2q5/8/6k1/8/1P5p/K6R w - - 0 124", // Draw
@@ -195,11 +189,7 @@ impl Yukari {
             nodes += s.nodes() + s.qnodes();
         }
         let now = Instant::now().duration_since(start);
-        println!(
-            "{nodes} nodes in {:.3}s = {:.0} nodes/s",
-            now.as_secs_f64(),
-            (nodes as f64) / now.as_secs_f64()
-        );
+        println!("{nodes} nodes in {:.3}s = {:.0} nodes/s", now.as_secs_f64(), (nodes as f64) / now.as_secs_f64());
     }
 }
 
@@ -323,9 +313,7 @@ fn main() -> io::Result<()> {
                     match engine.mode {
                         Mode::Normal => {
                             // Find the move in the list
-                            let m = engine
-                                .find_move(from, dest, prom)
-                                .expect("Attempted move not found!?");
+                            let m = engine.find_move(from, dest, prom).expect("Attempted move not found!?");
                             engine.board = engine.board.make(m, &engine.zobrist);
                             if is_repetition_draw(&engine.keystack, engine.board.hash()) {
                                 println!("1/2-1/2 {{Draw by repetition}}");
@@ -348,9 +336,7 @@ fn main() -> io::Result<()> {
                             engine.keystack.push(engine.board.hash());
                         }
                         Mode::Force => {
-                            let m = engine
-                                .find_move(from, dest, prom)
-                                .expect("Attempted move not found!?");
+                            let m = engine.find_move(from, dest, prom).expect("Attempted move not found!?");
                             engine.board = engine.board.make(m, &engine.zobrist);
                             if is_repetition_draw(&engine.keystack, engine.board.hash()) {
                                 println!("1/2-1/2 {{Draw by repetition}}");

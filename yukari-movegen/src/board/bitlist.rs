@@ -227,10 +227,7 @@ impl BitlistArray {
     pub fn add_piece(&mut self, square: Square, piece: PieceIndex) {
         let index = usize::from(square.into_inner());
         let piece = Bitlist::from(piece);
-        debug_assert!(
-            !self.0[index].contains(piece),
-            "attempted to add pre-existing piece attack on {square}"
-        );
+        debug_assert!(!self.0[index].contains(piece), "attempted to add pre-existing piece attack on {square}");
         self.0[index] |= piece;
     }
 
@@ -238,10 +235,7 @@ impl BitlistArray {
     pub fn remove_piece(&mut self, square: Square, piece: PieceIndex) {
         let index = usize::from(square.into_inner());
         let piece = Bitlist::from(piece);
-        debug_assert!(
-            self.0[index].contains(piece),
-            "attempted to remove nonexistent piece attack on {square}"
-        );
+        debug_assert!(self.0[index].contains(piece), "attempted to remove nonexistent piece attack on {square}");
         self.0[index] &= !piece;
     }
 }

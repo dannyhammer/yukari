@@ -27,9 +27,7 @@ pub fn divide(board: &Board, zobrist: &Zobrist, depth: u32) -> u64 {
 }
 
 fn main() {
-    let fen = std::env::args()
-        .nth(1)
-        .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument");
+    let fen = std::env::args().nth(1).expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument");
     let depth = std::env::args()
         .nth(2)
         .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument")

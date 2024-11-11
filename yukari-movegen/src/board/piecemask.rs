@@ -86,8 +86,7 @@ impl Piecemask {
         // Here we have a 32-bit integer, of which 16 bits are white and 16 are black.
         // Thus, any position where one side has more than 16 pieces is by the rules of chess impossible to reach,
         // and thus every time this gets called there will be at least one empty bit.
-        let piece_index =
-            unsafe { (self.empty() & Bitlist::mask_from_colour(colour)).peek_nonzero() };
+        let piece_index = unsafe { (self.empty() & Bitlist::mask_from_colour(colour)).peek_nonzero() };
         let yes = Bitlist::from(piece_index);
         let no = Bitlist::new();
 
@@ -111,10 +110,7 @@ impl Piecemask {
     ///
     /// Panics if `piece_index` is not a valid piece.
     pub fn remove_piece(&mut self, piece_index: PieceIndex) {
-        debug_assert!(
-            self.occupied().contains(piece_index.into()),
-            "attempted to remove invalid piece"
-        );
+        debug_assert!(self.occupied().contains(piece_index.into()), "attempted to remove invalid piece");
         self.pbq &= !Bitlist::from(piece_index);
         self.nbk &= !Bitlist::from(piece_index);
         self.rqk &= !Bitlist::from(piece_index);

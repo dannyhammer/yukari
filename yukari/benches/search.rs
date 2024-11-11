@@ -5,11 +5,7 @@ use yukari_movegen::{Board, Zobrist};
 
 pub fn search_bench(c: &mut Criterion) {
     let zobrist = Zobrist::new();
-    let kiwipete = Board::from_fen(
-        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
-        &zobrist,
-    )
-    .unwrap();
+    let kiwipete = Board::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1", &zobrist).unwrap();
 
     let mut group = c.benchmark_group("kiwipete");
 

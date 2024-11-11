@@ -100,9 +100,7 @@ impl PieceIndexArray {
     }
 
     /// Move a piece from
-    pub fn move_piece(
-        &mut self, piece_index: PieceIndex, from_square: Square, dest_square: Square,
-    ) {
+    pub fn move_piece(&mut self, piece_index: PieceIndex, from_square: Square, dest_square: Square) {
         self[from_square] = None;
         self[dest_square] = Some(piece_index);
     }

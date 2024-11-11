@@ -92,8 +92,7 @@ impl BoardData {
 
     /// Return the square of the king of a given colour.
     pub fn king_square(&self, colour: Colour) -> Square {
-        let king_index =
-            unsafe { (self.kings() & Bitlist::mask_from_colour(colour)).peek_nonzero() };
+        let king_index = unsafe { (self.kings() & Bitlist::mask_from_colour(colour)).peek_nonzero() };
         self.square_of_piece(king_index)
     }
 
@@ -140,8 +139,7 @@ impl BoardData {
 
     /// Move a piece from a square to another square.
     pub fn move_piece(&mut self, from_square: Square, to_square: Square) {
-        let piece_index =
-            self.index[from_square].expect("attempted to move piece from empty square");
+        let piece_index = self.index[from_square].expect("attempted to move piece from empty square");
         let piece = self.piece_from_bit(piece_index);
         let slide_dir = from_square.direction(to_square).and_then(|dir| {
             if matches!(piece, Piece::Bishop | Piece::Rook | Piece::Queen) {
@@ -166,10 +164,7 @@ impl BoardData {
         self.update_attacks(to_square, piece_index, piece, true, slide_dir);
         self.update_sliders(to_square, false);
 
-        debug_assert!(
-            !self.bitlist[to_square].contains(piece_index.into()),
-            "piece on {to_square} cannot attack itself"
-        );
+        debug_assert!(!self.bitlist[to_square].contains(piece_index.into()), "piece on {to_square} cannot attack itself");
     }
 
     /// Rebuild the attack set for the board.
@@ -191,10 +186,7 @@ impl BoardData {
     }
 
     /// Add or remove attacks for a square.
-    fn update_attacks(
-        &mut self, square: Square, bit: PieceIndex, piece: Piece, add: bool,
-        skip_dir: Option<Direction>,
-    ) {
+    fn update_attacks(&mut self, square: Square, bit: PieceIndex, piece: Piece, add: bool, skip_dir: Option<Direction>) {
         let update = |bitlist: &mut BitlistArray, dest: Square| {
             if add {
                 debug_assert!(dest != square);
@@ -301,8 +293,7 @@ impl BoardData {
 
     /// Extend or remove slider attacks to a square.
     fn update_sliders(&mut self, square: Square, add: bool) {
-        let sliders = self.bitlist[square]
-            & (self.piecemask.bishops() | self.piecemask.rooks() | self.piecemask.queens());
+        let sliders = self.bitlist[square] & (self.piecemask.bishops() | self.piecemask.rooks() | self.piecemask.queens());
 
         let square = Square16x8::from_square(square);
         for piece in sliders {
