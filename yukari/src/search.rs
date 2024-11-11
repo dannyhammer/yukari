@@ -99,7 +99,6 @@ impl<'a> Search<'a> {
         mate: i32,
         keystack: &mut Vec<u64>,
     ) -> i32 {
-
         // Check extension
         if board.in_check() {
             depth += 1;

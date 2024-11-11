@@ -31,10 +31,10 @@ fn main() {
         .nth(1)
         .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument");
     let depth = std::env::args()
-    .nth(2)
-    .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument")
-    .parse::<u32>()
-    .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument");
+        .nth(2)
+        .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument")
+        .parse::<u32>()
+        .expect("Please provide a FEN string wrapped in quotes or the string 'bench' as argument");
     let zobrist = Zobrist::new();
     let board = Board::from_fen(
         if fen == "startpos" {
@@ -51,5 +51,8 @@ fn main() {
     let start = Instant::now();
     let nodes = perft(&board, &zobrist, depth);
     println!("Perft {}: {}", depth, nodes);
-    println!("time: {:.3}s", Instant::now().duration_since(start).as_secs_f32());
+    println!(
+        "time: {:.3}s",
+        Instant::now().duration_since(start).as_secs_f32()
+    );
 }
