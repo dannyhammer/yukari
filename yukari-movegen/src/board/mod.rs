@@ -18,31 +18,11 @@ mod data;
 mod index;
 mod piecelist;
 mod piecemask;
+mod pins;
 
 use bitlist::Bitlist;
 use data::BoardData;
 pub use index::PieceIndex;
-
-/// Pin information in a board.
-pub struct PinInfo {
-    pub pins: [Option<Direction>; 32],
-    pub enpassant_pinned: Bitlist,
-}
-
-impl PinInfo {
-    pub const fn new() -> Self {
-        Self {
-            pins: [None; 32],
-            enpassant_pinned: Bitlist::new(),
-        }
-    }
-}
-
-impl Default for PinInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 #[derive(Clone)]
 pub struct Zobrist {
@@ -518,7 +498,7 @@ impl Board {
         dest: Square,
         kind: MoveType,
         promotion_piece: Option<Piece>,
-        pininfo: &PinInfo,
+        pininfo: &pins::PinInfo,
     ) {
         if let Some(dir) = pininfo.pins[self.data.piece_index(from).unwrap().into_inner() as usize]
         {
@@ -534,93 +514,8 @@ impl Board {
         v.push(Move::new(from, dest, kind, promotion_piece));
     }
 
-    /// Find pinned pieces and handle them specially.
-    ///
-    /// # Panics
-    /// Panics when Lofty has written shitty code.
-    #[must_use]
-    pub fn discover_pinned_pieces(&self) -> PinInfo {
-        let mut info = PinInfo::new();
-
-        let sliders = self.data.bishops() | self.data.rooks() | self.data.queens();
-        let king_square = self.data.king_square(self.side);
-        let king_square_16x8 = Square16x8::from_square(king_square);
-
-        for possible_pinner in self.data.pieces_of_colour(!self.side).and(sliders) {
-            let pinner_square = self.data.square_of_piece(possible_pinner);
-            let pinner_square_16x8 = Square16x8::from_square(pinner_square);
-            let pinner_type = self.data.piece_from_bit(possible_pinner);
-            let Some(pinner_king_dir) = pinner_square_16x8.direction(king_square_16x8) else {
-                continue;
-            };
-
-            if !pinner_king_dir.valid_for_slider(pinner_type) {
-                continue;
-            }
-
-            let mut friendly_blocker = None;
-            let mut enemy_blocker = None;
-            for square in pinner_square_16x8.ray_attacks(pinner_king_dir) {
-                if square == king_square {
-                    break;
-                }
-
-                if let Some(piece_index) = self.data.piece_index(square) {
-                    if self.data.colour_from_square(square) == Some(!self.side) {
-                        match enemy_blocker {
-                            Some(_) => {
-                                friendly_blocker = None;
-                                enemy_blocker = None;
-                                break;
-                            }
-                            None => {
-                                enemy_blocker = Some(piece_index);
-                            }
-                        }
-                    } else {
-                        match friendly_blocker {
-                            Some(_) => {
-                                friendly_blocker = None;
-                                enemy_blocker = None;
-                                break;
-                            }
-                            None => {
-                                friendly_blocker = Some(piece_index);
-                            }
-                        }
-                    }
-                }
-            }
-
-            match (friendly_blocker, enemy_blocker) {
-                // There are no friendly blockers: skip.
-                (None, _) => continue,
-                // There is one friendly blocker: it is pinned.
-                (Some(blocker), None) => {
-                    info.pins[blocker.into_inner() as usize] = Some(pinner_king_dir);
-                }
-                // There is one friendly blocker and one enemy blocker: it *may* be pinned for en-passant purposes
-                (Some(friendly_blocker), Some(enemy_blocker)) => {
-                    // If at least one of the blockers is a piece, we don't need to worry about en-passant.
-                    if self.data.piece_from_bit(friendly_blocker) != Piece::Pawn
-                        || self.data.piece_from_bit(enemy_blocker) != Piece::Pawn
-                        || (pinner_king_dir != Direction::East
-                            && pinner_king_dir != Direction::West)
-                    {
-                        continue;
-                    }
-
-                    // Alas, we do have to care.
-                    info.enpassant_pinned |= Bitlist::from(friendly_blocker);
-                }
-            }
-        }
-
-        info
-    }
-
     /// Generate en-passant pawn moves.
-    fn generate_pawn_enpassant(&self, v: &mut ArrayVec<[Move; 256]>, pininfo: &PinInfo) {
+    fn generate_pawn_enpassant(&self, v: &mut ArrayVec<[Move; 256]>, pininfo: &pins::PinInfo) {
         let Some(ep) = self.ep else { return; };
         for capturer in self
             .data
@@ -634,7 +529,7 @@ impl Board {
     }
 
     /// Generate pawn-specific quiet moves.
-    fn generate_pawn_quiet(&self, v: &mut ArrayVec<[Move; 256]>, from: Square, pininfo: &PinInfo) {
+    fn generate_pawn_quiet(&self, v: &mut ArrayVec<[Move; 256]>, from: Square, pininfo: &pins::PinInfo) {
         let promotion_pieces = [Piece::Queen, Piece::Knight, Piece::Rook, Piece::Bishop];
         let north = from.relative_north(self.side);
         let Some(dest) = north else { return; };
@@ -676,7 +571,7 @@ impl Board {
         let attacker_square = self.data.square_of_piece(attacker_index);
         let attacker_direction = attacker_square.direction(king_square);
 
-        let pininfo = self.discover_pinned_pieces();
+        let pininfo = pins::PinInfo::discover(self);
 
         let add_pawn_block = |v: &mut ArrayVec<[Move; 256]>, from, dest, kind| {
             let promotion_pieces = [Piece::Queen, Piece::Knight, Piece::Rook, Piece::Bishop];
@@ -880,7 +775,7 @@ impl Board {
     }
 
     pub fn generate_captures(&self, v: &mut ArrayVec<[Move; 256]>) {
-        let pininfo = self.discover_pinned_pieces();
+        let pininfo = pins::PinInfo::discover(self);
 
         let mut find_attackers = |dest: Square| {
             let promotion_pieces = [Piece::Queen, Piece::Knight, Piece::Rook, Piece::Bishop];
@@ -959,7 +854,7 @@ impl Board {
             return;
         }
 
-        let pininfo = self.discover_pinned_pieces();
+        let pininfo = pins::PinInfo::discover(self);
 
         let mut minor_mask = Bitlist::new();
         let mut rook_mask = Bitlist::new();
@@ -969,7 +864,7 @@ impl Board {
                             dest: Square,
                             kind: MoveType,
                             promotion_piece: Option<Piece>,
-                            pininfo: &PinInfo| {
+                            pininfo: &pins::PinInfo| {
             if let Some(dir) =
                 pininfo.pins[self.data.piece_index(from).unwrap().into_inner() as usize]
             {
@@ -1140,7 +1035,7 @@ impl Board {
             return self.generate_double_check(v);
         }
 
-        let pininfo = self.discover_pinned_pieces();
+        let pininfo = pins::PinInfo::discover(self);
         self.generate_captures(v);
 
         // Pawns.
@@ -1164,7 +1059,6 @@ impl Board {
                 .data
                 .attacks_to(dest, self.side)
                 .and(!self.data.pawns())
-            //.and(!self.data.kings())
             {
                 // It's illegal for kings to move to attacked squares; prune those out.
                 if self.data.piece_from_bit(attacker) == Piece::King
