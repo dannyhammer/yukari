@@ -588,43 +588,44 @@ impl Board {
             {
                 continue;
             }
-            if self.data.piece_from_bit(capturer) == Piece::Pawn
-                && Rank::from(attacker_square).is_relative_eighth(self.side)
+            if self.data.piece_from_bit(capturer) != Piece::Pawn
+                || !Rank::from(attacker_square).is_relative_eighth(self.side)
             {
-                for piece in &promotion_pieces {
-                    self.try_push_move(
-                        v,
-                        from,
-                        attacker_square,
-                        MoveType::CapturePromotion,
-                        Some(*piece),
-                        &pininfo,
-                    );
-                }
-            } else {
                 self.try_push_move(v, from, attacker_square, MoveType::Capture, None, &pininfo);
+                continue;
+            }
+            for piece in &promotion_pieces {
+                self.try_push_move(
+                    v,
+                    from,
+                    attacker_square,
+                    MoveType::CapturePromotion,
+                    Some(*piece),
+                    &pininfo,
+                );
             }
         }
 
-        if let Some(ep) = self.ep {
-            if let Some(ep_south) = ep.relative_south(self.side) {
-                if ep_south == attacker_square && attacker_piece == Piece::Pawn {
-                    for capturer in self.data.attacks_to(ep, self.side)
-                        & self.data.pawns()
-                        & !pininfo.enpassant_pinned
-                    {
-                        self.try_push_move(
-                            v,
-                            self.data.square_of_piece(capturer),
-                            ep,
-                            MoveType::EnPassant,
-                            None,
-                            &pininfo,
-                        );
-                    }
-                }
+        // en-passant
+        (|| {
+            let Some(ep) = self.ep else { return };
+            let Some(ep_south) = ep.relative_south(self.side) else { return };
+            if ep_south != attacker_square || attacker_piece != Piece::Pawn {
+                return;
             }
-        }
+            for capturer in
+                self.data.attacks_to(ep, self.side) & self.data.pawns() & !pininfo.enpassant_pinned
+            {
+                self.try_push_move(
+                    v,
+                    self.data.square_of_piece(capturer),
+                    ep,
+                    MoveType::EnPassant,
+                    None,
+                    &pininfo,
+                );
+            }
+        })();
 
         // Can we block the check?
         if let Piece::Bishop | Piece::Rook | Piece::Queen = attacker_piece {
