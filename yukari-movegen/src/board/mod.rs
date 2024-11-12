@@ -319,80 +319,50 @@ impl Board {
     pub fn make(&self, m: Move, zobrist: &Zobrist) -> Self {
         let mut b = self.clone();
         match m.kind {
-            MoveType::Normal => {
-                let piece = b.piece_from_square(m.from).unwrap() as usize;
-                b.data.move_piece(m.from, m.dest);
-                b.hash ^= zobrist.piece[b.side as usize][piece][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][piece][m.dest.into_inner() as usize];
-                b.set_ep(zobrist, None);
-            }
-            MoveType::DoublePush => {
-                let piece = b.piece_from_square(m.from).unwrap() as usize;
-                b.data.move_piece(m.from, m.dest);
-                b.hash ^= zobrist.piece[b.side as usize][piece][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][piece][m.dest.into_inner() as usize];
-                b.set_ep(zobrist, m.from.relative_north(b.side));
-            }
-            MoveType::Capture => {
+            MoveType::Promotion | MoveType::Normal | MoveType::DoublePush => {}
+            MoveType::Capture | MoveType::CapturePromotion => {
                 let piece_index = b.data.piece_index(m.dest).expect("attempted to capture an empty square");
-                let moving_piece = b.piece_from_square(m.from).unwrap() as usize;
                 let captured_piece = b.piece_from_square(m.dest).unwrap() as usize;
+                b.hash ^= zobrist.piece[!b.side as usize][captured_piece][m.dest.into_inner() as usize];
                 b.data.remove_piece(piece_index, true);
-                b.data.move_piece(m.from, m.dest);
-                b.hash ^= zobrist.piece[b.side as usize][moving_piece][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][moving_piece][m.dest.into_inner() as usize]
-                    ^ zobrist.piece[!b.side as usize][captured_piece][m.dest.into_inner() as usize];
-                b.set_ep(zobrist, None);
             }
             MoveType::Castle => {
-                if m.dest > m.from {
-                    let rook_from = m.dest.east().unwrap();
-                    let rook_to = m.dest.west().unwrap();
-                    b.data.move_piece(rook_from, rook_to);
-                    b.hash ^= zobrist.piece[b.side as usize][Piece::Rook as usize][rook_from.into_inner() as usize]
-                        ^ zobrist.piece[b.side as usize][Piece::Rook as usize][rook_to.into_inner() as usize];
-                } else {
-                    let rook_from = m.dest.west().unwrap().west().unwrap();
-                    let rook_to = m.dest.east().unwrap();
-                    b.data.move_piece(rook_from, rook_to);
-                    b.hash ^= zobrist.piece[b.side as usize][Piece::Rook as usize][rook_from.into_inner() as usize]
-                        ^ zobrist.piece[b.side as usize][Piece::Rook as usize][rook_to.into_inner() as usize];
-                }
-                b.data.move_piece(m.from, m.dest);
-                b.hash ^= zobrist.piece[b.side as usize][Piece::King as usize][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][Piece::King as usize][m.dest.into_inner() as usize];
-                b.set_ep(zobrist, None);
+                let (rook_from, rook_to) = 
+                    if m.dest > m.from { 
+                        (m.dest.east().unwrap(), m.dest.west().unwrap()) 
+                    } else { 
+                        (m.dest.west().unwrap().west().unwrap(), m.dest.east().unwrap())
+                    };
+                b.hash ^= zobrist.piece[b.side as usize][Piece::Rook as usize][rook_from.into_inner() as usize]
+                    ^ zobrist.piece[b.side as usize][Piece::Rook as usize][rook_to.into_inner() as usize];
+                b.data.move_piece(rook_from, rook_to);
             }
             MoveType::EnPassant => {
                 let target_square = b.ep.unwrap().relative_south(b.side).unwrap();
                 let target_piece = b.data.piece_index(target_square).unwrap();
+                b.hash ^= zobrist.piece[!b.side as usize][Piece::Pawn as usize][target_square.into_inner() as usize];
                 b.data.remove_piece(target_piece, true);
-                b.data.move_piece(m.from, m.dest);
-                b.hash ^= zobrist.piece[b.side as usize][Piece::Pawn as usize][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][Piece::Pawn as usize][m.dest.into_inner() as usize]
-                    ^ zobrist.piece[!b.side as usize][Piece::Pawn as usize][target_square.into_inner() as usize];
-                b.set_ep(zobrist, None);
             }
-            MoveType::Promotion => {
-                let piece_index = b.data.piece_index(m.from).unwrap();
-                b.data.remove_piece(piece_index, true);
-                b.data.add_piece(m.prom.unwrap(), b.side, m.dest, true);
-                b.hash ^= zobrist.piece[b.side as usize][Piece::Pawn as usize][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][m.prom.unwrap() as usize][m.dest.into_inner() as usize];
-                b.set_ep(zobrist, None);
-            }
-            MoveType::CapturePromotion => {
-                let source_piece = b.data.piece_index(m.from).unwrap();
-                let target_piece = b.data.piece_index(m.dest).unwrap();
-                let captured_piece = b.piece_from_square(m.dest).unwrap() as usize;
-                b.data.remove_piece(source_piece, true);
-                b.data.remove_piece(target_piece, true);
-                b.data.add_piece(m.prom.unwrap(), b.side, m.dest, true);
-                b.hash ^= zobrist.piece[b.side as usize][Piece::Pawn as usize][m.from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][m.prom.unwrap() as usize][m.dest.into_inner() as usize]
-                    ^ zobrist.piece[!b.side as usize][captured_piece][m.dest.into_inner() as usize];
-                b.set_ep(zobrist, None);
-            }
+        }
+
+        b.data.move_piece(m.from, m.dest);
+
+        let piece = b.piece_from_square(m.dest).unwrap() as usize;
+        b.hash ^= zobrist.piece[b.side as usize][piece][m.from.into_inner() as usize]
+            ^ zobrist.piece[b.side as usize][piece][m.dest.into_inner() as usize];
+
+        if matches!(m.kind, MoveType::Promotion | MoveType::CapturePromotion) {
+            let piece_index = b.data.piece_index(m.dest).unwrap();
+            b.data.remove_piece(piece_index, true);
+            b.data.add_piece(m.prom.unwrap(), b.side, m.dest, true);
+            b.hash ^= zobrist.piece[b.side as usize][Piece::Pawn as usize][m.from.into_inner() as usize]
+                ^ zobrist.piece[b.side as usize][m.prom.unwrap() as usize][m.dest.into_inner() as usize];
+        }
+
+        if matches!(m.kind, MoveType::DoublePush) {
+            b.set_ep(zobrist, m.from.relative_north(b.side));
+        } else {
+            b.set_ep(zobrist, None);
         }
 
         let a1 = Square::from_rank_file(Rank::One, File::A);
