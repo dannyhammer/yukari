@@ -20,12 +20,13 @@ pub struct Search<'a> {
     nullmove_success: u64,
     stop_after: Option<Instant>,
     zobrist: &'a Zobrist,
+    history: [[u16; 64]; 64],
 }
 
 impl<'a> Search<'a> {
     #[must_use]
     pub const fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist) -> Self {
-        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist }
+        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64] }
     }
 
     fn quiesce(&mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>) -> i32 {
@@ -87,9 +88,11 @@ impl<'a> Search<'a> {
             return self.quiesce(board, lower_bound, upper_bound, eval, pv);
         }
 
+        pv.set_len(0);
+
         const R: i32 = 3;
 
-        if !board.in_check() && depth >= 2 {
+        if !board.in_check() && depth >= 2 && eval.get(board.side()) >= upper_bound {
             keystack.push(board.hash());
             let board = board.make_null(self.zobrist);
             let mut child_pv = ArrayVec::new();
@@ -113,6 +116,15 @@ impl<'a> Search<'a> {
         moves.set_len(0);
         board.generate(&mut moves);
 
+        moves.sort_by(|a, b| {
+            match (a.is_capture(), b.is_capture()) {
+                (false, false) => self.history[b.from.into_inner() as usize][b.dest.into_inner() as usize].cmp(&self.history[a.from.into_inner() as usize][a.dest.into_inner() as usize]),
+                (false, true) => std::cmp::Ordering::Greater,
+                (true, false) => std::cmp::Ordering::Less,
+                (true, true) => std::cmp::Ordering::Equal, // hack
+            }
+        });
+
         // Is this checkmate or stalemate?
         if moves.is_empty() {
             pv.set_len(0);
@@ -124,7 +136,6 @@ impl<'a> Search<'a> {
 
         // Is this a repetition draw?
         if is_repetition_draw(keystack, board.hash()) {
-            pv.set_len(0);
             return 0;
         }
 
@@ -150,14 +161,21 @@ impl<'a> Search<'a> {
             keystack.pop();
 
             if score >= upper_bound {
-                pv.set_len(0);
+                let history = self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
+                if history > u16::MAX/2 {
+                    for from in &mut self.history {
+                        for to in from {
+                            *to /= 2;
+                        }
+                    }
+                }
+                self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize] += (depth as u16).pow(2);
                 return upper_bound;
             }
 
             if self.nodes.trailing_zeros() >= 10 {
                 if let Some(time) = self.stop_after {
                     if Instant::now() >= time {
-                        pv.set_len(0);
                         return lower_bound;
                     }
                 }
