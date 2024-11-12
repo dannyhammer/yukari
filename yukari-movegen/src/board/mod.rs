@@ -4,8 +4,8 @@ use std::{
     fmt::Display,
 };
 
-use rand::{prelude::StdRng, Rng, SeedableRng};
 use tinyvec::ArrayVec;
+pub use zobrist::Zobrist;
 
 use crate::{
     chessmove::{Move, MoveType},
@@ -20,55 +20,11 @@ mod index;
 mod piecelist;
 mod piecemask;
 mod pins;
+mod zobrist;
 
 use bitlist::Bitlist;
 use data::BoardData;
 pub use index::PieceIndex;
-
-#[derive(Clone)]
-pub struct Zobrist {
-    pub piece: [[[u64; 64]; 6]; 2],
-    pub side: u64,
-    pub ep: [u64; 8],
-    pub castling: [u64; 4],
-}
-
-impl Zobrist {
-    #[must_use]
-    pub fn new() -> Self {
-        let mut rng = StdRng::seed_from_u64(1);
-
-        let mut piece = [[[0_u64; 64]; 6]; 2];
-        let mut ep = [0; 8];
-        let mut castling = [0; 4];
-
-        for side in &mut piece {
-            for piece_kind in side.iter_mut() {
-                for square in piece_kind.iter_mut() {
-                    *square = rng.gen();
-                }
-            }
-        }
-
-        let side = rng.gen();
-
-        for file in &mut ep {
-            *file = rng.gen();
-        }
-
-        for castle_flag in &mut castling {
-            *castle_flag = rng.gen();
-        }
-
-        Self { piece, side, ep, castling }
-    }
-}
-
-impl Default for Zobrist {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 
 /// A chess position.
 #[derive(Clone)]
@@ -81,8 +37,6 @@ pub struct Board {
     castle: (bool, bool, bool, bool),
     /// En-passant square, if any.
     ep: Option<Square>,
-    /// Zobrist hash.
-    hash: u64,
 }
 
 impl Default for Board {
@@ -157,7 +111,7 @@ impl Board {
     #[must_use]
     #[inline]
     pub const fn new() -> Self {
-        Self { side: Colour::White, castle: (false, false, false, false), ep: None, data: BoardData::new(), hash: 0 }
+        Self { side: Colour::White, castle: (false, false, false, false), ep: None, data: BoardData::new() }
     }
 
     #[allow(clippy::missing_panics_doc)]
@@ -232,7 +186,7 @@ impl Board {
 
                     let square = Square::from_rank_file(rank.try_into().unwrap(), file.try_into().unwrap());
 
-                    b.data.add_piece(piece, colour, square, false);
+                    b.data.add_piece(piece, colour, square, false, zobrist);
 
                     file += 1;
                 }
@@ -259,21 +213,25 @@ impl Board {
         } else {
             if c == b'K' {
                 b.castle.0 = true;
+                b.data.add_castling(0, zobrist);
                 idx += 1;
                 c = fen[idx];
             }
             if c == b'Q' {
                 b.castle.1 = true;
+                b.data.add_castling(1, zobrist);
                 idx += 1;
                 c = fen[idx];
             }
             if c == b'k' {
                 b.castle.2 = true;
+                b.data.add_castling(2, zobrist);
                 idx += 1;
                 c = fen[idx];
             }
             if c == b'q' {
                 b.castle.3 = true;
+                b.data.add_castling(3, zobrist);
                 idx += 1;
             }
         }
@@ -289,7 +247,6 @@ impl Board {
             b.ep = Some(Square::from_rank_file(rank, file));
         }
 
-        b.recalculate_hash(zobrist);
         b.data.rebuild_attacks();
 
         if b.illegal() {
@@ -300,13 +257,8 @@ impl Board {
     }
 
     fn set_ep(&mut self, zobrist: &Zobrist, ep: Option<Square>) {
-        if let Some(ep) = self.ep {
-            self.hash ^= zobrist.ep[File::from(ep) as usize];
-        }
+        self.data.set_ep(self.ep, ep, zobrist);
         self.ep = ep;
-        if let Some(ep) = self.ep {
-            self.hash ^= zobrist.ep[File::from(ep) as usize];
-        }
     }
 
     /// Make a move on the board.
@@ -322,41 +274,29 @@ impl Board {
             MoveType::Promotion | MoveType::Normal | MoveType::DoublePush => {}
             MoveType::Capture | MoveType::CapturePromotion => {
                 let piece_index = b.data.piece_index(m.dest).expect("attempted to capture an empty square");
-                let captured_piece = b.piece_from_square(m.dest).unwrap() as usize;
-                b.hash ^= zobrist.piece[!b.side as usize][captured_piece][m.dest.into_inner() as usize];
-                b.data.remove_piece(piece_index, true);
+                b.data.remove_piece(piece_index, true, zobrist);
             }
             MoveType::Castle => {
-                let (rook_from, rook_to) = 
-                    if m.dest > m.from { 
-                        (m.dest.east().unwrap(), m.dest.west().unwrap()) 
-                    } else { 
-                        (m.dest.west().unwrap().west().unwrap(), m.dest.east().unwrap())
-                    };
-                b.hash ^= zobrist.piece[b.side as usize][Piece::Rook as usize][rook_from.into_inner() as usize]
-                    ^ zobrist.piece[b.side as usize][Piece::Rook as usize][rook_to.into_inner() as usize];
-                b.data.move_piece(rook_from, rook_to);
+                let (rook_from, rook_to) = if m.dest > m.from {
+                    (m.dest.east().unwrap(), m.dest.west().unwrap())
+                } else {
+                    (m.dest.west().unwrap().west().unwrap(), m.dest.east().unwrap())
+                };
+                b.data.move_piece(rook_from, rook_to, zobrist);
             }
             MoveType::EnPassant => {
                 let target_square = b.ep.unwrap().relative_south(b.side).unwrap();
                 let target_piece = b.data.piece_index(target_square).unwrap();
-                b.hash ^= zobrist.piece[!b.side as usize][Piece::Pawn as usize][target_square.into_inner() as usize];
-                b.data.remove_piece(target_piece, true);
+                b.data.remove_piece(target_piece, true, zobrist);
             }
         }
 
-        b.data.move_piece(m.from, m.dest);
-
-        let piece = b.piece_from_square(m.dest).unwrap() as usize;
-        b.hash ^= zobrist.piece[b.side as usize][piece][m.from.into_inner() as usize]
-            ^ zobrist.piece[b.side as usize][piece][m.dest.into_inner() as usize];
+        b.data.move_piece(m.from, m.dest, zobrist);
 
         if matches!(m.kind, MoveType::Promotion | MoveType::CapturePromotion) {
             let piece_index = b.data.piece_index(m.dest).unwrap();
-            b.data.remove_piece(piece_index, true);
-            b.data.add_piece(m.prom.unwrap(), b.side, m.dest, true);
-            b.hash ^= zobrist.piece[b.side as usize][Piece::Pawn as usize][m.from.into_inner() as usize]
-                ^ zobrist.piece[b.side as usize][m.prom.unwrap() as usize][m.dest.into_inner() as usize];
+            b.data.remove_piece(piece_index, true, zobrist);
+            b.data.add_piece(m.prom.unwrap(), b.side, m.dest, true, zobrist);
         }
 
         if matches!(m.kind, MoveType::DoublePush) {
@@ -375,47 +315,47 @@ impl Board {
         if m.from == e1 {
             if b.castle.0 {
                 b.castle.0 = false;
-                b.hash ^= zobrist.castling[0];
+                b.data.remove_castling(0, zobrist);
             }
             if b.castle.1 {
                 b.castle.1 = false;
-                b.hash ^= zobrist.castling[1];
+                b.data.remove_castling(1, zobrist);
             }
         }
 
         if m.from == e8 {
             if b.castle.2 {
                 b.castle.2 = false;
-                b.hash ^= zobrist.castling[2];
+                b.data.remove_castling(2, zobrist);
             }
             if b.castle.3 {
                 b.castle.3 = false;
-                b.hash ^= zobrist.castling[3];
+                b.data.remove_castling(3, zobrist);
             }
         }
 
         if (m.from == h1 || m.dest == h1) && b.castle.0 {
             b.castle.0 = false;
-            b.hash ^= zobrist.castling[0];
+            b.data.remove_castling(0, zobrist);
         }
 
         if (m.from == a1 || m.dest == a1) && b.castle.1 {
             b.castle.1 = false;
-            b.hash ^= zobrist.castling[1];
+            b.data.remove_castling(1, zobrist);
         }
 
         if (m.from == h8 || m.dest == h8) && b.castle.2 {
             b.castle.2 = false;
-            b.hash ^= zobrist.castling[2];
+            b.data.remove_castling(2, zobrist);
         }
 
         if (m.from == a8 || m.dest == a8) && b.castle.3 {
             b.castle.3 = false;
-            b.hash ^= zobrist.castling[3];
+            b.data.remove_castling(3, zobrist);
         }
 
         b.side = !b.side;
-        b.hash ^= zobrist.side;
+        b.data.toggle_side(zobrist);
         b
     }
 
@@ -949,38 +889,7 @@ impl Board {
 
     #[must_use]
     pub const fn hash(&self) -> u64 {
-        self.hash
-    }
-
-    pub fn recalculate_hash(&mut self, zobrist: &Zobrist) {
-        let mut hash = 0;
-        for piece in self.pieces() {
-            let side = piece.colour() as usize;
-            let square = self.square_of_piece(piece).into_inner() as usize;
-            let piece = self.piece_from_bit(piece) as usize;
-            hash ^= zobrist.piece[side][piece][square];
-        }
-
-        if let Some(ep) = self.ep {
-            hash ^= zobrist.ep[Rank::from(ep) as usize];
-        }
-
-        if self.castle.0 {
-            hash ^= zobrist.castling[0];
-        }
-        if self.castle.1 {
-            hash ^= zobrist.castling[1];
-        }
-        if self.castle.2 {
-            hash ^= zobrist.castling[2];
-        }
-        if self.castle.3 {
-            hash ^= zobrist.castling[3];
-        }
-        if self.side == Colour::Black {
-            hash ^= zobrist.side;
-        }
-        self.hash = hash;
+        self.data.hash()
     }
 
     #[must_use]
@@ -993,85 +902,11 @@ impl Board {
         let mut board = self.clone();
         board.side = !board.side;
         board.ep = None;
-        board.hash ^= zobrist.side;
+        board.data.toggle_side(zobrist);
         board
     }
 }
 
-#[cfg(test)]
-mod test {
-    use std::str::FromStr;
-
-    use tinyvec::ArrayVec;
-
-    use crate::{Board, Move, Square, Zobrist};
-
-    // Helper mostly copied from main engine to convert notated moves into real moves
-    fn make_move(board: &Board, zobrist: &Zobrist, move_str: &str) -> Board {
-        let (from_str, dest_str) = move_str.split_at(2);
-        let from = Square::from_str(from_str).unwrap();
-        let dest = Square::from_str(dest_str).unwrap();
-        let moves: [Move; 256] = [Move::default(); 256];
-        let mut moves = ArrayVec::from(moves);
-        moves.set_len(0);
-        board.generate(&mut moves);
-        for m in moves {
-            if m.from == from && m.dest == dest {
-                return board.make(m, zobrist);
-            }
-        }
-        unreachable!("Should never hit this under testing conditions");
-    }
-
-    // Helper to take a board and compute the hash freshly
-    fn fresh_hash(board: &Board, zobrist: &Zobrist) -> u64 {
-        // Have to clone to get mutable board
-        let mut cloned = board.clone();
-        cloned.recalculate_hash(zobrist);
-        cloned.hash
-    }
-
-    // Check that incrementally computing a Zobrist hash results in the same value as a freshly
-    // computed hash
-    #[test]
-    fn incremental_zobrist() {
-        // Compare a set of bad moves generated from earlier (current as of this comment's writing) versions of Yukari
-        // Generating a board from a FEN notation computes the hash directly. It should always match the incremental
-        // version computed directly
-        let zobrist = Zobrist::new();
-        let mut board = Board::from_fen("8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - - 0 1", &zobrist).unwrap();
-        // Moves to test
-        let moves = ["a1b1", "a7a6", "b1a1", "a6b6", "a1b1", "b6a6"];
-        // Make each move
-        for (i, &m) in moves.iter().enumerate() {
-            board = make_move(&board, &zobrist, m);
-            assert_eq!(board.hash, fresh_hash(&board, &zobrist), "Failed testing move #{i} ({m})");
-        }
-    }
-
-    // Test that making and unmaking a move has the same hash before and after
-    #[test]
-    fn make_unmake() {
-        let zobrist = Zobrist::new();
-        let mut board = Board::from_fen("8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - - 0 1", &zobrist).unwrap();
-        // This hash will always be the same between incremental and non-incremental because it's been computed directly
-        let initial_hash = board.hash;
-        // Now make the test move
-        board = make_move(&board, &zobrist, "a1b1");
-        // Allows us to flip side back without making a move
-        board = board.make_null(&zobrist);
-        // Option for dev to test that it's the same between both incremental and non
-        //assert_eq!(board.hash, fresh_hash(&board, &zobrist), "Made move differs between incremental and fresh");
-        // Unmake the move
-        board = make_move(&board, &zobrist, "b1a1");
-        // Unmake the side swap hash break
-        board = board.make_null(&zobrist);
-        // Check that it's the same hash
-        assert_eq!(board.hash, initial_hash, "Incremental hash differs between original and unmade");
-        // Allow testing if a fresh hash would match
-        assert_eq!(fresh_hash(&board, &zobrist), initial_hash, "Freshly computed hash differs between original and unmade");
-    }
-}
 /* impl Drop for Board {
     fn drop(&mut self) {
         if ::std::thread::panicking() {

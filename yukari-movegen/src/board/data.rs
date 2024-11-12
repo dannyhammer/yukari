@@ -3,6 +3,7 @@ use super::{
     index::{PieceIndex, PieceIndexArray},
     piecelist::Piecelist,
     piecemask::Piecemask,
+    zobrist::Zobrist,
 };
 use crate::{
     colour::Colour,
@@ -17,6 +18,8 @@ pub struct BoardData {
     piecelist: Piecelist,
     index: PieceIndexArray,
     piecemask: Piecemask,
+    /// Zobrist hash.
+    hash: u64,
 }
 
 impl BoardData {
@@ -27,6 +30,7 @@ impl BoardData {
             piecelist: Piecelist::new(),
             index: PieceIndexArray::new(),
             piecemask: Piecemask::new(),
+            hash: 0,
         }
     }
 
@@ -111,11 +115,17 @@ impl BoardData {
         Some(Colour::from(self.index[square]?))
     }
 
+    /// Zobrist hash of this position.
+    pub const fn hash(&self) -> u64 {
+        self.hash
+    }
+
     /// Add a `Piece` to a `Square`.
-    pub fn add_piece(&mut self, piece: Piece, colour: Colour, square: Square, update: bool) {
+    pub fn add_piece(&mut self, piece: Piece, colour: Colour, square: Square, update: bool, zobrist: &Zobrist) {
         let piece_index = self.piecemask.add_piece(piece, colour);
         self.piecelist.add_piece(piece_index, square);
         self.index.add_piece(piece_index, square);
+        zobrist.add_piece(colour, self.piece_from_bit(piece_index), square, &mut self.hash);
 
         if update {
             self.update_attacks(square, piece_index, piece, true, None);
@@ -124,12 +134,13 @@ impl BoardData {
     }
 
     /// Remove a piece from a square.
-    pub fn remove_piece(&mut self, piece_index: PieceIndex, update: bool) {
+    pub fn remove_piece(&mut self, piece_index: PieceIndex, update: bool, zobrist: &Zobrist) {
         let square = self.square_of_piece(piece_index);
         let piece = self.piece_from_bit(piece_index);
         self.piecemask.remove_piece(piece_index);
         self.piecelist.remove_piece(piece_index, square);
         self.index.remove_piece(piece_index, square);
+        zobrist.remove_piece(piece_index.colour(), piece, square, &mut self.hash);
 
         if update {
             self.update_attacks(square, piece_index, piece, false, None);
@@ -138,7 +149,7 @@ impl BoardData {
     }
 
     /// Move a piece from a square to another square.
-    pub fn move_piece(&mut self, from_square: Square, to_square: Square) {
+    pub fn move_piece(&mut self, from_square: Square, to_square: Square, zobrist: &Zobrist) {
         let piece_index = self.index[from_square].expect("attempted to move piece from empty square");
         let piece = self.piece_from_bit(piece_index);
         let slide_dir = from_square.direction(to_square).and_then(|dir| {
@@ -157,6 +168,7 @@ impl BoardData {
 
         self.piecelist.move_piece(piece_index, to_square);
         self.index.move_piece(piece_index, from_square, to_square);
+        zobrist.move_piece(piece_index.colour(), piece, from_square, to_square, &mut self.hash);
 
         if slide_dir.is_some() {
             self.bitlist.remove_piece(to_square, piece_index);
@@ -165,6 +177,26 @@ impl BoardData {
         self.update_sliders(to_square, false);
 
         debug_assert!(!self.bitlist[to_square].contains(piece_index.into()), "piece on {to_square} cannot attack itself");
+    }
+
+    /// Set the en-passant square.
+    pub fn set_ep(&mut self, old: Option<Square>, new: Option<Square>, zobrist: &Zobrist) {
+        zobrist.set_ep(old, new, &mut self.hash);
+    }
+
+    /// Add castling rights.
+    pub fn add_castling(&mut self, kind: usize, zobrist: &Zobrist) {
+        zobrist.add_castling(kind, &mut self.hash);
+    }
+
+    /// Remove castling rights.
+    pub fn remove_castling(&mut self, kind: usize, zobrist: &Zobrist) {
+        zobrist.remove_castling(kind, &mut self.hash);
+    }
+
+    /// Toggle side to move.
+    pub fn toggle_side(&mut self, zobrist: &Zobrist) {
+        zobrist.toggle_side(&mut self.hash);
     }
 
     /// Rebuild the attack set for the board.
