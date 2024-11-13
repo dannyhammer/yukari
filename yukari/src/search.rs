@@ -20,7 +20,7 @@ pub struct Search<'a> {
     nullmove_success: u64,
     stop_after: Option<Instant>,
     zobrist: &'a Zobrist,
-    history: [[u16; 64]; 64],
+    history: [[i16; 64]; 64],
 }
 
 impl<'a> Search<'a> {
@@ -141,7 +141,7 @@ impl<'a> Search<'a> {
 
         let mut finding_pv = true;
 
-        for m in moves {
+        for (i, m) in moves.into_iter().enumerate() {
             self.nodes += 1;
 
             let mut child_pv = ArrayVec::new();
@@ -161,15 +161,19 @@ impl<'a> Search<'a> {
             keystack.pop();
 
             if score >= upper_bound {
-                let history = self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
-                if history > u16::MAX/2 {
-                    for from in &mut self.history {
-                        for to in from {
-                            *to /= 2;
-                        }
+                const HISTORY_MAX: i32 = 16384;
+                let bonus = (300 * depth - 250).clamp(-HISTORY_MAX, HISTORY_MAX);
+                for m in moves.into_iter().take(i) {
+                    if m.is_capture() {
+                        continue;
                     }
+                    let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
+                    let bonus = -bonus - (*history as i32) * bonus / HISTORY_MAX;
+                    *history += bonus as i16;
                 }
-                self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize] += (depth as u16).pow(2);
+                let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
+                let bonus = bonus - (*history as i32) * bonus / HISTORY_MAX;
+                *history += bonus as i16;
                 return upper_bound;
             }
 
