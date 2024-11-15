@@ -6,9 +6,7 @@ use std::{
 
 use tinyvec::ArrayVec;
 use yukari::{
-    self,
-    engine::{TimeControl, TimeMode},
-    is_repetition_draw, Search,
+    self, allocate_tt, engine::{TimeControl, TimeMode}, is_repetition_draw, Search, TtEntry
 };
 use yukari_movegen::{Board, Move, Piece, Square, Zobrist};
 
@@ -84,15 +82,15 @@ impl Yukari {
     }
 
     /// Real search, falls back to dumb search in extreme time constraints
-    pub fn search(&mut self, best_pv: &mut ArrayVec<[Move; 32]>) {
+    pub fn search(&mut self, best_pv: &mut ArrayVec<[Move; 32]>, tt: &mut [TtEntry]) {
         let start = Instant::now();
         let stop_after = start + Duration::from_secs_f32(self.tc.search_time());
-        let mut s = Search::new(Some(stop_after), &self.zobrist);
+        let mut s = Search::new(Some(stop_after), &self.zobrist, tt);
         // clone another to use inside the loop
         // Use a seperate backing data to record the current move set
         let mut depth = 1;
         let mut pv: ArrayVec<[Move; 32]> = ArrayVec::new();
-        while depth < 20 {
+        while depth <= 99 {
             pv.set_len(0);
             // FIXME: We want to search one depth without time controls
             let score = s.search_root(&self.board, depth, &mut pv, &mut self.keystack);
@@ -115,7 +113,7 @@ impl Yukari {
         self.tc.increment_moves();
     }
 
-    fn bench(&self) {
+    fn bench(&self, tt: &mut [TtEntry]) {
         let fens = [
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 10",
@@ -174,7 +172,7 @@ impl Yukari {
         for fen in fens {
             let zobrist = Zobrist::new();
             let board = Board::from_fen(fen, &zobrist).unwrap();
-            let mut s = Search::new(None, &zobrist);
+            let mut s = Search::new(None, &zobrist, tt);
             let start = Instant::now();
             let mut keystack = Vec::new();
             let mut pv = ArrayVec::new();
@@ -201,10 +199,11 @@ impl Default for Yukari {
 
 fn main() -> io::Result<()> {
     let mut engine = Yukari::new();
+    let mut tt = allocate_tt(16);
 
     for arg in std::env::args() {
         if arg == "bench" {
-            engine.bench();
+            engine.bench(&mut tt);
             return Ok(());
         }
     }
@@ -240,6 +239,8 @@ fn main() -> io::Result<()> {
                 println!("feature colors=0 setboard=1");
                 // Technically needed to support those # <msg> lines
                 println!("feature debug=1");
+                // We support hash table allocation sizing.
+                println!("feature memory=1");
                 // Communicate that feature reporting is done
                 println!("feature done=1");
             }
@@ -250,6 +251,11 @@ fn main() -> io::Result<()> {
             // Parse our two time controls from the whole commmand lines
             // TODO: This is rather xboard specific
             "level" | "st" => engine.parse_tc(trimmed),
+            // Allocate a hash table.
+            "memory" => {
+                let megabytes = args.parse::<usize>().unwrap();
+                tt = allocate_tt(megabytes);
+            }
             // Hard would turn on thinking during opponent's time, easy would turn it off
             // we don't do it, so it's unimportant
             "hard" | "easy" => {}
@@ -277,10 +283,8 @@ fn main() -> io::Result<()> {
             "go" => {
                 engine.mode = Mode::Normal;
                 // When we get go we should make a move immediately
-                let pv: [Move; 32] = [Move::default(); 32];
-                let mut pv = ArrayVec::from(pv);
-                pv.set_len(0);
-                engine.search(&mut pv);
+                let mut pv = ArrayVec::new();
+                engine.search(&mut pv, &mut tt);
                 // Choose the top move
                 let m = pv[0];
                 // We must actually make the move locally too
@@ -292,6 +296,7 @@ fn main() -> io::Result<()> {
                 engine.keystack.push(engine.board.hash());
             }
             "force" => engine.mode = Mode::Force,
+            "d" => println!("{}", engine.board),
             _ => {
                 // Always ascii
                 let chars = trimmed.as_bytes();
@@ -324,7 +329,7 @@ fn main() -> io::Result<()> {
                             let pv: [Move; 32] = [Move::default(); 32];
                             let mut pv = ArrayVec::from(pv);
                             pv.set_len(0);
-                            engine.search(&mut pv);
+                            engine.search(&mut pv, &mut tt);
                             // Choose the top move
                             let m = pv[0];
                             // We must actually make the move locally too

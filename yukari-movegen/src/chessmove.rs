@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 use crate::{
     piece::Piece,
@@ -13,7 +13,26 @@ pub struct Move {
     pub prom: Option<Piece>,
 }
 
+const _NICHE_OPTIMISED: () = assert!(std::mem::size_of::<Move>() == std::mem::size_of::<Option<Move>>());
+
 impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let from_file: u8 = b'a' + u8::from(File::from(self.from));
+        let from_rank: u8 = b'1' + u8::from(Rank::from(self.from));
+        let dest_file: u8 = b'a' + u8::from(File::from(self.dest));
+        let dest_rank: u8 = b'1' + u8::from(Rank::from(self.dest));
+        write!(f, "{}{}{}{}", from_file as char, from_rank as char, dest_file as char, dest_rank as char)?;
+
+        if let Some(prom) = self.prom {
+            static PROMOTE_CHAR: [char; 6] = ['p', 'n', 'b', 'r', 'q', 'k'];
+            write!(f, "{}", PROMOTE_CHAR[prom as usize])?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Debug for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let from_file: u8 = b'a' + u8::from(File::from(self.from));
         let from_rank: u8 = b'1' + u8::from(Rank::from(self.from));

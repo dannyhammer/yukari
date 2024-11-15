@@ -102,6 +102,8 @@ impl Display for Board {
             writeln!(f, "-")?;
         }
 
+        writeln!(f, "{:016x}", self.hash())?;
+
         Ok(())
     }
 }
@@ -901,7 +903,7 @@ impl Board {
     pub fn make_null(&self, zobrist: &Zobrist) -> Self {
         let mut board = self.clone();
         board.side = !board.side;
-        board.ep = None;
+        board.set_ep(zobrist, None);
         board.data.toggle_side(zobrist);
         board
     }

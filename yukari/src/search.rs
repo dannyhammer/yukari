@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{cmp::Ordering, i32, sync::atomic::AtomicU64, time::Instant};
 
 use tinyvec::ArrayVec;
 use yukari_movegen::{Board, Move, Zobrist};
@@ -13,6 +13,52 @@ pub fn is_repetition_draw(keystack: &[u64], hash: u64) -> bool {
     keystack.iter().filter(|key| **key == hash).count() >= 3
 }
 
+#[derive(Clone, Default)]
+#[repr(u8)]
+enum TtFlags {
+    #[default]
+    Exact = 0,
+    Upper = 1,
+    Lower = 2,
+}
+
+#[derive(Default)]
+#[repr(align(16))]
+pub struct TtEntry {
+    key: AtomicU64,
+    data: AtomicU64,
+}
+
+#[derive(Default)]
+struct TtData {
+    flags: TtFlags,
+    depth: u8,
+    score: i16,
+    m: Option<Move>,
+}
+
+const _TT_ENTRY_IS_16_BYTE: () = assert!(std::mem::size_of::<TtEntry>() == 16);
+const _TT_DATA_IS_8_BYTE: () = assert!(std::mem::size_of::<TtData>() == 8);
+
+pub fn allocate_tt(megabytes: usize) -> Vec<TtEntry> {
+    let target_bytes = megabytes * 1024 * 1024;
+
+    let mut size = 1_usize;
+    loop {
+        if size > target_bytes {
+            break;
+        }
+        size *= 2;
+    }
+    size /= 2;
+    size /= std::mem::size_of::<TtEntry>();
+
+    let mut tt: Vec<TtEntry> = Vec::new();
+    tt.resize_with(size, Default::default);
+    println!("# Allocated {} bytes of hash", size * std::mem::size_of::<TtEntry>());
+    tt
+}
+
 pub struct Search<'a> {
     nodes: u64,
     qnodes: u64,
@@ -21,12 +67,13 @@ pub struct Search<'a> {
     stop_after: Option<Instant>,
     zobrist: &'a Zobrist,
     history: [[i16; 64]; 64],
+    tt: &'a [TtEntry],
 }
 
 impl<'a> Search<'a> {
     #[must_use]
-    pub const fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist) -> Self {
-        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64] }
+    pub fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist, tt: &'a [TtEntry]) -> Self {
+        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64], tt }
     }
 
     fn quiesce(&mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>) -> i32 {
@@ -77,7 +124,7 @@ impl<'a> Search<'a> {
     #[allow(clippy::too_many_arguments)]
     fn search(
         &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32, eval: &EvalState,
-        pv: &mut ArrayVec<[Move; 32]>, mate: i32, keystack: &mut Vec<u64>,
+        pv: &mut ArrayVec<[Move; 32]>, ply: i32, keystack: &mut Vec<u64>,
     ) -> i32 {
         // Check extension
         if board.in_check() {
@@ -90,13 +137,54 @@ impl<'a> Search<'a> {
 
         pv.set_len(0);
 
+        let mut tt_move = None;
+
+        {
+            let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
+            let entry = &self.tt[entry];
+            let entry_key = entry.key.load(std::sync::atomic::Ordering::Relaxed);
+            let entry_data = entry.data.load(std::sync::atomic::Ordering::Relaxed);
+            let mut entry: TtData = unsafe { std::mem::transmute(entry_data) };
+
+            if entry.score >= (MATE_VALUE - 500) as i16 {
+                entry.score -= ply as i16;
+            }
+            if entry.score <= (-MATE_VALUE + 500) as i16 {
+                entry.score += ply as i16;
+            }
+
+            if entry_key ^ entry_data == board.hash() {
+                if false {
+                    match entry.flags {
+                        TtFlags::Exact => {
+                            if entry.depth as i32 >= depth {
+                                return i32::from(entry.score);
+                            }
+                        },
+                        TtFlags::Upper => {
+                            if entry.depth as i32 >= depth && i32::from(entry.score) <= lower_bound {
+                                return lower_bound;
+                            }
+                        },
+                        TtFlags::Lower => {
+                            if entry.depth as i32 >= depth && i32::from(entry.score) >= upper_bound {
+                                return upper_bound;
+                            }
+                        },
+                    }
+                }
+
+                tt_move = entry.m;
+            }
+        }
+
         const R: i32 = 3;
 
         if !board.in_check() && depth >= 2 && eval.get(board.side()) >= upper_bound {
             keystack.push(board.hash());
             let board = board.make_null(self.zobrist);
             let mut child_pv = ArrayVec::new();
-            let score = -self.search(&board, depth - 1 - R, -upper_bound, -upper_bound + 1, eval, &mut child_pv, mate, keystack);
+            let score = -self.search(&board, depth - 1 - R, -upper_bound, -upper_bound + 1, eval, &mut child_pv, ply + 1, keystack);
             keystack.pop();
 
             self.nullmove_attempts += 1;
@@ -116,20 +204,11 @@ impl<'a> Search<'a> {
         moves.set_len(0);
         board.generate(&mut moves);
 
-        moves.sort_by(|a, b| {
-            match (a.is_capture(), b.is_capture()) {
-                (false, false) => self.history[b.from.into_inner() as usize][b.dest.into_inner() as usize].cmp(&self.history[a.from.into_inner() as usize][a.dest.into_inner() as usize]),
-                (false, true) => std::cmp::Ordering::Greater,
-                (true, false) => std::cmp::Ordering::Less,
-                (true, true) => std::cmp::Ordering::Equal, // hack
-            }
-        });
-
         // Is this checkmate or stalemate?
         if moves.is_empty() {
             pv.set_len(0);
             if board.in_check() {
-                return -mate;
+                return -MATE_VALUE + ply;
             }
             return 0;
         }
@@ -139,6 +218,26 @@ impl<'a> Search<'a> {
             return 0;
         }
 
+        moves.sort_by(|a, b| {
+            if let Some(tt_move) = tt_move {
+                if *a == tt_move {
+                    return Ordering::Less;
+                }
+                if *b == tt_move {
+                    return Ordering::Greater;
+                }
+            }
+
+            match (a.is_capture(), b.is_capture()) {
+                (false, false) => self.history[b.from.into_inner() as usize][b.dest.into_inner() as usize].cmp(&self.history[a.from.into_inner() as usize][a.dest.into_inner() as usize]),
+                (false, true) => Ordering::Greater,
+                (true, false) => Ordering::Less,
+                (true, true) => Ordering::Equal, // hack
+            }
+        });
+
+        let mut best_move = None;
+        let mut best_score = i32::MIN;
         let mut finding_pv = true;
 
         for (i, m) in moves.into_iter().enumerate() {
@@ -153,12 +252,17 @@ impl<'a> Search<'a> {
             keystack.push(board.hash());
 
             if !finding_pv {
-                score = -self.search(&board, depth - 1, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, mate - 1, keystack);
+                score = -self.search(&board, depth - 1, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
             }
             if finding_pv || score > lower_bound {
-                score = -self.search(&board, depth - 1, -upper_bound, -lower_bound, &eval, &mut child_pv, mate - 1, keystack);
+                score = -self.search(&board, depth - 1, -upper_bound, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
             }
             keystack.pop();
+
+            if score > best_score {
+                best_move = Some(m);
+                best_score = score;
+            }
 
             if score >= upper_bound {
                 const HISTORY_MAX: i32 = 16384;
@@ -174,6 +278,28 @@ impl<'a> Search<'a> {
                 let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
                 let bonus = bonus - (*history as i32) * bonus / HISTORY_MAX;
                 *history += bonus as i16;
+
+                {
+                    let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
+                    let entry = &self.tt[entry];
+                    let mut upper_bound = upper_bound;
+                    if upper_bound >= MATE_VALUE - 500 {
+                        upper_bound += ply;
+                    }
+                    if upper_bound <= -MATE_VALUE + 500 {
+                        upper_bound -= ply;
+                    }
+                    let entry_data = TtData {
+                        m: best_move,
+                        score: upper_bound as i16,
+                        flags: TtFlags::Lower,
+                        depth: depth as u8,
+                    };
+                    let entry_data = unsafe { std::mem::transmute::<TtData, u64>(entry_data) };
+                    entry.key.store(board.hash() ^ entry_data, std::sync::atomic::Ordering::Relaxed);
+                    entry.data.store(entry_data, std::sync::atomic::Ordering::Relaxed);
+                }
+
                 return upper_bound;
             }
 
@@ -195,12 +321,35 @@ impl<'a> Search<'a> {
                 finding_pv = false;
             }
         }
+
+        {
+            let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
+            let entry = &self.tt[entry];
+            let mut lower_bound = lower_bound;
+            if lower_bound >= MATE_VALUE - 500 {
+                lower_bound += ply;
+            }
+            if lower_bound <= -MATE_VALUE + 500 {
+                lower_bound -= ply;
+            }
+
+            let entry_data = TtData {
+                m: best_move,
+                score: lower_bound as i16,
+                flags: if finding_pv { TtFlags::Upper } else { TtFlags::Exact },
+                depth: depth as u8,
+            };
+            let entry_data = unsafe { std::mem::transmute::<TtData, u64>(entry_data) };
+            entry.key.store(board.hash() ^ entry_data, std::sync::atomic::Ordering::Relaxed);
+            entry.data.store(entry_data, std::sync::atomic::Ordering::Relaxed);
+        }
+
         lower_bound
     }
 
     pub fn search_root(&mut self, board: &Board, depth: i32, pv: &mut ArrayVec<[Move; 32]>, keystack: &mut Vec<u64>) -> i32 {
         let eval = EvalState::eval(board);
-        self.search(board, depth, -100_000, 100_000, &eval, pv, MATE_VALUE, keystack)
+        self.search(board, depth, -100_000, 100_000, &eval, pv, 0, keystack)
     }
 
     #[must_use]
