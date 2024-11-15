@@ -233,12 +233,29 @@ impl<'a> Search<'a> {
             // Push the move to check for repetition draws
             keystack.push(board.hash());
 
-            if !finding_pv {
-                score = -self.search(&board, depth - 1, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
+            let mut reduction = 1;
+
+            if lower_bound == upper_bound - 1 && depth >= 3 && i >= 4 && !board.in_check() && !m.is_capture() {
+                let depth = (depth as f32).ln();
+                let i = (i as f32).ln();
+                reduction += (depth * i).mul_add(0.5, 1.0) as i32; // credit: adam
             }
-            if finding_pv || score > lower_bound {
-                score = -self.search(&board, depth - 1, -upper_bound, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
+            
+            loop {
+                if !finding_pv {
+                    score = -self.search(&board, depth - reduction, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
+                }
+                if finding_pv || score > lower_bound {
+                    score = -self.search(&board, depth - reduction, -upper_bound, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
+                }
+            
+                if reduction > 1 && score > lower_bound {
+                    reduction = 1;
+                    continue;
+                }
+                break;
             }
+
             keystack.pop();
 
             if score > best_score {
