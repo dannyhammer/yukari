@@ -40,7 +40,7 @@ impl Yukari {
             // Using startpos fixes knights
             board: Board::startpos(&zobrist),
             // Time controls are uninitialized
-            tc: TimeControl::new(TimeMode::St(0)),
+            tc: TimeControl::new(TimeMode::MoveTime(0)),
             // Normal move making is on by default
             mode: Mode::Normal,
             zobrist,

@@ -17,7 +17,7 @@ impl TimeControl {
     pub const fn new(mode: TimeMode) -> Self {
         Self {
             remaining: match mode {
-                TimeMode::St(time) => time as f32,
+                TimeMode::MoveTime(time) => time as f32 / 1000.0,
                 TimeMode::Incremental { base, .. } | TimeMode::Classical { base, .. } => base,
             },
             mode,
@@ -39,7 +39,7 @@ impl TimeControl {
     #[must_use]
     pub fn search_time(&self) -> f32 {
         match self.mode {
-            TimeMode::St(secs) => (secs as f32) - 0.02,
+            TimeMode::MoveTime(millisecs) => (millisecs as f32 / 1000.0) - 0.02,
             TimeMode::Incremental { base: _, increment } => {
                 let remaining = self.remaining - 0.02;
                 remaining.min((remaining + increment) / 30.0)
@@ -64,8 +64,8 @@ impl TimeControl {
 /// Time controls can be operating in several modes which have different interpretations
 #[derive(Clone, Copy, Debug)]
 pub enum TimeMode {
-    /// St mode has a fixed seconds per move
-    St(u32),
+    /// MoveTime mode has a fixed number of milliseconds per move
+    MoveTime(u32),
     /// Incremental mode gives us the whole game's clock, plus time to be added after each move
     Incremental {
         /// Base time for the game in seconds
@@ -96,12 +96,12 @@ impl FromStr for TimeMode {
             "st" => {
                 // Parse out seconds per move
                 let secs = u32::from_str(args[0]).map_err(|_| ())?;
-                Ok(Self::St(secs))
+                Ok(Self::MoveTime(secs*1000))
             }
             "level" => {
                 // Figure out if the mode is incremental or classical
                 let mps = u32::from_str(args[0]).map_err(|_| ())?;
-                let base = Self::parse_time(args[1]).ok_or(())?;
+                let base = Self::parse_xboard_level(args[1]).ok_or(())?;
                 if mps == 0 {
                     // Incremental
                     // In incremental we need the increment to add after each move
@@ -120,7 +120,7 @@ impl FromStr for TimeMode {
 
 impl TimeMode {
     /// Parses a time that might be in min or min:sec format
-    fn parse_time(s: &str) -> Option<f32> {
+    fn parse_xboard_level(s: &str) -> Option<f32> {
         if let Some(sep) = s.find(':') {
             let min_part = f32::from_str(&s[0..sep]).ok()?;
             let sec_part = f32::from_str(&s[sep + 1..]).ok()?;
