@@ -121,6 +121,27 @@ impl<'a> Search<'a> {
         alpha
     }
 
+    fn probe_tt(&self, board: &Board) -> Option<Move> {
+        let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
+        let entry = &self.tt[entry];
+        let entry_key = entry.key.load(std::sync::atomic::Ordering::Relaxed);
+        let entry_data = entry.data.load(std::sync::atomic::Ordering::Relaxed);
+        let entry: TtData = unsafe { std::mem::transmute(entry_data) };
+
+        if entry_key ^ entry_data == board.hash() {
+            return entry.m;
+        }
+        None
+    }
+
+    fn write_tt(&self, board: &Board, data: TtData) {
+        let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
+        let entry = &self.tt[entry];
+        let data = unsafe { std::mem::transmute::<TtData, u64>(data) };
+        entry.key.store(board.hash() ^ data, std::sync::atomic::Ordering::Relaxed);
+        entry.data.store(data, std::sync::atomic::Ordering::Relaxed);
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn search(
         &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32, eval: &EvalState,
@@ -137,46 +158,7 @@ impl<'a> Search<'a> {
 
         pv.set_len(0);
 
-        let mut tt_move = None;
-
-        {
-            let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
-            let entry = &self.tt[entry];
-            let entry_key = entry.key.load(std::sync::atomic::Ordering::Relaxed);
-            let entry_data = entry.data.load(std::sync::atomic::Ordering::Relaxed);
-            let mut entry: TtData = unsafe { std::mem::transmute(entry_data) };
-
-            if entry.score >= (MATE_VALUE - 500) as i16 {
-                entry.score -= ply as i16;
-            }
-            if entry.score <= (-MATE_VALUE + 500) as i16 {
-                entry.score += ply as i16;
-            }
-
-            if entry_key ^ entry_data == board.hash() {
-                if false {
-                    match entry.flags {
-                        TtFlags::Exact => {
-                            if entry.depth as i32 >= depth {
-                                return i32::from(entry.score);
-                            }
-                        },
-                        TtFlags::Upper => {
-                            if entry.depth as i32 >= depth && i32::from(entry.score) <= lower_bound {
-                                return lower_bound;
-                            }
-                        },
-                        TtFlags::Lower => {
-                            if entry.depth as i32 >= depth && i32::from(entry.score) >= upper_bound {
-                                return upper_bound;
-                            }
-                        },
-                    }
-                }
-
-                tt_move = entry.m;
-            }
-        }
+        let tt_move = self.probe_tt(board);
 
         const R: i32 = 3;
 
@@ -279,26 +261,12 @@ impl<'a> Search<'a> {
                 let bonus = bonus - (*history as i32) * bonus / HISTORY_MAX;
                 *history += bonus as i16;
 
-                {
-                    let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
-                    let entry = &self.tt[entry];
-                    let mut upper_bound = upper_bound;
-                    if upper_bound >= MATE_VALUE - 500 {
-                        upper_bound += ply;
-                    }
-                    if upper_bound <= -MATE_VALUE + 500 {
-                        upper_bound -= ply;
-                    }
-                    let entry_data = TtData {
-                        m: best_move,
-                        score: upper_bound as i16,
-                        flags: TtFlags::Lower,
-                        depth: depth as u8,
-                    };
-                    let entry_data = unsafe { std::mem::transmute::<TtData, u64>(entry_data) };
-                    entry.key.store(board.hash() ^ entry_data, std::sync::atomic::Ordering::Relaxed);
-                    entry.data.store(entry_data, std::sync::atomic::Ordering::Relaxed);
-                }
+                self.write_tt(&board, TtData {
+                    m: best_move,
+                    score: upper_bound as i16,
+                    flags: TtFlags::Lower,
+                    depth: depth as u8,
+                });
 
                 return upper_bound;
             }
@@ -322,27 +290,12 @@ impl<'a> Search<'a> {
             }
         }
 
-        {
-            let entry = (board.hash() & ((self.tt.len() - 1) as u64)) as usize;
-            let entry = &self.tt[entry];
-            let mut lower_bound = lower_bound;
-            if lower_bound >= MATE_VALUE - 500 {
-                lower_bound += ply;
-            }
-            if lower_bound <= -MATE_VALUE + 500 {
-                lower_bound -= ply;
-            }
-
-            let entry_data = TtData {
-                m: best_move,
-                score: lower_bound as i16,
-                flags: if finding_pv { TtFlags::Upper } else { TtFlags::Exact },
-                depth: depth as u8,
-            };
-            let entry_data = unsafe { std::mem::transmute::<TtData, u64>(entry_data) };
-            entry.key.store(board.hash() ^ entry_data, std::sync::atomic::Ordering::Relaxed);
-            entry.data.store(entry_data, std::sync::atomic::Ordering::Relaxed);
-        }
+        self.write_tt(board, TtData {
+            m: best_move,
+            score: lower_bound as i16,
+            flags: if finding_pv { TtFlags::Upper } else { TtFlags::Exact },
+            depth: depth as u8,
+        });
 
         lower_bound
     }
