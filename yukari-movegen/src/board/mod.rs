@@ -895,6 +895,11 @@ impl Board {
     }
 
     #[must_use]
+    pub fn hash_pawns(&self, zobrist: &Zobrist) -> u64 {
+        self.data.hash_pawns(zobrist)
+    }
+
+    #[must_use]
     pub fn in_check(&self) -> bool {
         !self.data.attacks_to(self.data.king_square(self.side), !self.side).empty()
     }

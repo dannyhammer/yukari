@@ -68,16 +68,34 @@ pub struct Search<'a> {
     zobrist: &'a Zobrist,
     history: [[i16; 64]; 64],
     tt: &'a [TtEntry],
+    corrhist: &'a mut [[i32; 16384]; 2],
 }
 
 impl<'a> Search<'a> {
     #[must_use]
-    pub fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist, tt: &'a [TtEntry]) -> Self {
-        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64], tt }
+    pub fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist, tt: &'a [TtEntry], corrhist: &'a mut [[i32; 16384]; 2]) -> Self {
+        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64], tt, corrhist }
+    }
+
+    fn update_corrhist(&mut self, board: &Board, depth: i32, diff: i32) {
+        const CORRHIST_GRAIN: i32 = 256;
+        const CORRHIST_WEIGHT_SCALE: i32 = 256;
+        const CORRHIST_MAX: i32 = 256 * 32;
+        let entry = &mut self.corrhist[board.side() as usize][board.hash_pawns(self.zobrist) as usize & 16383];
+        let diff = diff * CORRHIST_GRAIN;
+        let weight = 16.min(depth + 1);
+
+        *entry = ((*entry * (CORRHIST_WEIGHT_SCALE - weight) + diff * weight) / CORRHIST_WEIGHT_SCALE).clamp(-CORRHIST_MAX, CORRHIST_MAX);
+    }
+
+    fn eval_with_corrhist(&self, board: &Board, eval: i32) -> i32 {
+        const CORRHIST_GRAIN: i32 = 256;
+        let entry = &self.corrhist[board.side() as usize][board.hash_pawns(self.zobrist) as usize & 16383];
+        (eval + entry / CORRHIST_GRAIN).clamp(-MATE_VALUE + 1, MATE_VALUE - 1)
     }
 
     fn quiesce(&mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>) -> i32 {
-        let eval_int = eval.get(board.side());
+        let eval_int = self.eval_with_corrhist(board, eval.get(board.side()));
 
         pv.set_len(0);
 
@@ -159,10 +177,11 @@ impl<'a> Search<'a> {
         pv.set_len(0);
 
         let tt_move = self.probe_tt(board);
+        let eval_int = self.eval_with_corrhist(board, eval.get(board.side()));
 
         const R: i32 = 3;
 
-        if !board.in_check() && depth >= 2 && eval.get(board.side()) >= upper_bound {
+        if !board.in_check() && depth >= 2 && eval_int >= upper_bound {
             keystack.push(board.hash());
             let board = board.make_null(self.zobrist);
             let mut child_pv = ArrayVec::new();
@@ -177,7 +196,7 @@ impl<'a> Search<'a> {
             }
         }
 
-        if !board.in_check() && depth == 1 && eval.get(board.side()) - 200 >= upper_bound {
+        if !board.in_check() && depth == 1 && eval_int - 200 >= upper_bound {
             return upper_bound;
         }
 
@@ -227,6 +246,7 @@ impl<'a> Search<'a> {
 
             let mut child_pv = ArrayVec::new();
             let eval = eval.clone().update_eval(board, m);
+            let parent_board = board;
             let board = board.make(m, self.zobrist);
             let mut score = 0;
 
@@ -285,6 +305,10 @@ impl<'a> Search<'a> {
                     depth: depth as u8,
                 });
 
+                if !board.in_check() && !m.is_capture() && upper_bound >= eval_int {
+                    self.update_corrhist(parent_board, depth, upper_bound - eval_int);
+                }
+
                 return upper_bound;
             }
 
@@ -313,6 +337,10 @@ impl<'a> Search<'a> {
             flags: if finding_pv { TtFlags::Upper } else { TtFlags::Exact },
             depth: depth as u8,
         });
+
+        if !board.in_check() && !best_move.unwrap().is_capture() && (!finding_pv || lower_bound <= eval_int) {
+            self.update_corrhist(board, depth, lower_bound - eval_int);
+        }
 
         lower_bound
     }

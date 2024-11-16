@@ -120,6 +120,17 @@ impl BoardData {
         self.hash
     }
 
+    /// Pawn-only Zobrist hash of this position.
+    pub fn hash_pawns(&self, zobrist: &Zobrist) -> u64 {
+        let mut hash = 0;
+        for pawn in self.pawns() {
+            let square = self.square_of_piece(pawn);
+            let colour = pawn.colour();
+            zobrist.add_piece(colour, Piece::Pawn, square, &mut hash);
+        }
+        hash
+    }
+
     /// Add a `Piece` to a `Square`.
     pub fn add_piece(&mut self, piece: Piece, colour: Colour, square: Square, update: bool, zobrist: &Zobrist) {
         let piece_index = self.piecemask.add_piece(piece, colour);
