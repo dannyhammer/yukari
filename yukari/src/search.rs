@@ -240,12 +240,12 @@ impl<'a> Search<'a> {
                 let i = (i as f32).ln();
                 reduction += (depth * i).mul_add(0.5, 1.0) as i32; // credit: adam
             }
-            
+
             loop {
                 if !finding_pv {
                     score = -self.search(&board, depth - reduction, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
                 }
-                if finding_pv || score > lower_bound {
+                if finding_pv || (score > lower_bound && score < upper_bound) {
                     score = -self.search(&board, depth - reduction, -upper_bound, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
                 }
             
