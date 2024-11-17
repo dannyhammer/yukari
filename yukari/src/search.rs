@@ -196,7 +196,7 @@ impl<'a> Search<'a> {
             }
         }
 
-        if !board.in_check() && depth == 1 && eval_int - 200 >= upper_bound {
+        if !board.in_check() && depth == 1 && eval_int - 75 >= upper_bound {
             return upper_bound;
         }
 
