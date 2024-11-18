@@ -1,9 +1,5 @@
 use super::{
-    bitlist::{Bitlist, BitlistArray},
-    index::{PieceIndex, PieceIndexArray},
-    piecelist::Piecelist,
-    piecemask::Piecemask,
-    zobrist::Zobrist,
+    bitlist::{Bitlist, BitlistArray}, eval::Eval, index::{PieceIndex, PieceIndexArray}, piecelist::Piecelist, piecemask::Piecemask, zobrist::Zobrist
 };
 use crate::{
     colour::Colour,
@@ -20,6 +16,8 @@ pub struct BoardData {
     piecemask: Piecemask,
     /// Zobrist hash.
     hash: u64,
+    /// Evaluation state.
+    eval: Eval,
 }
 
 impl BoardData {
@@ -31,6 +29,7 @@ impl BoardData {
             index: PieceIndexArray::new(),
             piecemask: Piecemask::new(),
             hash: 0,
+            eval: Eval::new(),
         }
     }
 
@@ -137,6 +136,7 @@ impl BoardData {
         self.piecelist.add_piece(piece_index, square);
         self.index.add_piece(piece_index, square);
         zobrist.add_piece(colour, self.piece_from_bit(piece_index), square, &mut self.hash);
+        self.eval.add_piece(piece, square, colour);
 
         if update {
             self.update_attacks(square, piece_index, piece, true, None);
@@ -152,6 +152,7 @@ impl BoardData {
         self.piecelist.remove_piece(piece_index, square);
         self.index.remove_piece(piece_index, square);
         zobrist.remove_piece(piece_index.colour(), piece, square, &mut self.hash);
+        self.eval.remove_piece(piece, square, piece_index.colour());
 
         if update {
             self.update_attacks(square, piece_index, piece, false, None);
@@ -180,6 +181,7 @@ impl BoardData {
         self.piecelist.move_piece(piece_index, to_square);
         self.index.move_piece(piece_index, from_square, to_square);
         zobrist.move_piece(piece_index.colour(), piece, from_square, to_square, &mut self.hash);
+        self.eval.move_piece(piece, from_square, to_square, piece_index.colour());
 
         if slide_dir.is_some() {
             self.bitlist.remove_piece(to_square, piece_index);
@@ -208,6 +210,11 @@ impl BoardData {
     /// Toggle side to move.
     pub fn toggle_side(&mut self, zobrist: &Zobrist) {
         zobrist.toggle_side(&mut self.hash);
+    }
+
+    /// Evaluation from the perspective of `colour`.
+    pub fn eval(&self, colour: Colour) -> i32 {
+        self.eval.get(colour)
     }
 
     /// Rebuild the attack set for the board.

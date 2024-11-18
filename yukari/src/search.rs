@@ -3,8 +3,6 @@ use std::{cmp::Ordering, i32, sync::atomic::AtomicU64, time::Instant};
 use tinyvec::ArrayVec;
 use yukari_movegen::{Board, Move, Zobrist};
 
-use crate::eval::EvalState;
-
 const MATE_VALUE: i32 = 10_000;
 
 #[derive(Clone)]
@@ -113,8 +111,8 @@ impl<'a> Search<'a> {
         (eval + entry / CORRHIST_GRAIN).clamp(-MATE_VALUE + 1, MATE_VALUE - 1)
     }
 
-    fn quiesce(&mut self, board: &Board, mut alpha: i32, beta: i32, eval: &EvalState, pv: &mut ArrayVec<[Move; 32]>) -> i32 {
-        let eval_int = self.eval_with_corrhist(board, eval.get(board.side()));
+    fn quiesce(&mut self, board: &Board, mut alpha: i32, beta: i32, pv: &mut ArrayVec<[Move; 32]>) -> i32 {
+        let eval_int = self.eval_with_corrhist(board, board.eval(board.side()));
 
         pv.set_len(0);
 
@@ -126,17 +124,16 @@ impl<'a> Search<'a> {
         board.generate_captures_incremental(|m| {
             self.qnodes += 1;
 
-            let eval = eval.clone().update_eval(board, m);
+            let board = board.make(m, self.zobrist);
 
             // Pre-empt stand pat by skipping moves with bad evaluation.
             // One can think of this as delta pruning, with the delta being zero.
-            if eval.get(board.side()) <= alpha {
+            if board.eval(board.side()) <= alpha {
                 return true;
             }
 
-            let board = board.make(m, self.zobrist);
             let mut child_pv = ArrayVec::new();
-            let score = -self.quiesce(&board, -beta, -alpha, &eval, &mut child_pv);
+            let score = -self.quiesce(&board, -beta, -alpha, &mut child_pv);
 
             if score >= beta {
                 alpha = beta;
@@ -181,7 +178,7 @@ impl<'a> Search<'a> {
 
     #[allow(clippy::too_many_arguments)]
     fn search(
-        &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32, eval: &EvalState,
+        &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32,
         pv: &mut ArrayVec<[Move; 32]>, ply: i32, keystack: &mut Vec<u64>,
     ) -> i32 {
         // Check extension
@@ -190,13 +187,13 @@ impl<'a> Search<'a> {
         }
 
         if depth <= 0 {
-            return self.quiesce(board, lower_bound, upper_bound, eval, pv);
+            return self.quiesce(board, lower_bound, upper_bound, pv);
         }
 
         pv.set_len(0);
 
         let tt_move = self.probe_tt(board);
-        let eval_int = self.eval_with_corrhist(board, eval.get(board.side()));
+        let eval_int = self.eval_with_corrhist(board, board.eval(board.side()));
 
         const R: i32 = 3;
 
@@ -204,7 +201,7 @@ impl<'a> Search<'a> {
             keystack.push(board.hash());
             let board = board.make_null(self.zobrist);
             let mut child_pv = ArrayVec::new();
-            let score = -self.search(&board, depth - 1 - R, -upper_bound, -upper_bound + 1, eval, &mut child_pv, ply + 1, keystack);
+            let score = -self.search(&board, depth - 1 - R, -upper_bound, -upper_bound + 1, &mut child_pv, ply + 1, keystack);
             keystack.pop();
 
             self.nullmove_attempts += 1;
@@ -265,7 +262,6 @@ impl<'a> Search<'a> {
             self.nodes += 1;
 
             let mut child_pv = ArrayVec::new();
-            let eval = eval.clone().update_eval(board, m);
             let parent_board = board;
             let board = board.make(m, self.zobrist);
             let mut score = 0;
@@ -283,10 +279,10 @@ impl<'a> Search<'a> {
 
             loop {
                 if !finding_pv {
-                    score = -self.search(&board, depth - reduction, -lower_bound - 1, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
+                    score = -self.search(&board, depth - reduction, -lower_bound - 1, -lower_bound, &mut child_pv, ply + 1, keystack);
                 }
                 if finding_pv || (score > lower_bound && score < upper_bound) {
-                    score = -self.search(&board, depth - reduction, -upper_bound, -lower_bound, &eval, &mut child_pv, ply + 1, keystack);
+                    score = -self.search(&board, depth - reduction, -upper_bound, -lower_bound, &mut child_pv, ply + 1, keystack);
                 }
             
                 if reduction > 1 && score > lower_bound {
@@ -367,8 +363,7 @@ impl<'a> Search<'a> {
     }
 
     pub fn search_root(&mut self, board: &Board, depth: i32, pv: &mut ArrayVec<[Move; 32]>, keystack: &mut Vec<u64>) -> i32 {
-        let eval = EvalState::eval(board);
-        self.search(board, depth, -100_000, 100_000, &eval, pv, 0, keystack)
+        self.search(board, depth, -100_000, 100_000, pv, 0, keystack)
     }
 
     #[must_use]

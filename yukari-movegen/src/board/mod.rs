@@ -16,6 +16,7 @@ use crate::{
 
 mod bitlist;
 mod data;
+mod eval;
 mod index;
 mod piecelist;
 mod piecemask;
@@ -897,6 +898,11 @@ impl Board {
     #[must_use]
     pub fn hash_pawns(&self, zobrist: &Zobrist) -> u64 {
         self.data.hash_pawns(zobrist)
+    }
+
+    #[must_use]
+    pub fn eval(&self, colour: Colour) -> i32 {
+        self.data.eval(colour)
     }
 
     #[must_use]

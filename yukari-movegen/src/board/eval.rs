@@ -1,4 +1,4 @@
-use yukari_movegen::{Board, Colour, Move, MoveType, Piece, Square};
+use crate::{Colour, Piece, Square};
 
 // CREDIT: These tables come from PeSTO by Ronald Friederich.
 
@@ -149,26 +149,15 @@ const PST_EG: [[i32; 64]; 6] = [
 const PHASE: [i32; 6] = [0, 1, 1, 2, 4, 0];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EvalState {
+pub struct Eval {
     pst_mg: i32,
     pst_eg: i32,
     phase: i32,
 }
 
-impl EvalState {
+impl Eval {
     pub const fn new() -> Self {
         Self { pst_mg: 0, pst_eg: 0, phase: 0 }
-    }
-
-    pub fn eval(board: &Board) -> Self {
-        let mut score = Self::new();
-
-        for piece in board.pieces() {
-            let square = board.square_of_piece(piece);
-            score.add_piece(board.piece_from_bit(piece), square, piece.colour());
-        }
-
-        score
     }
 
     pub fn get(&self, colour: Colour) -> i32 {
@@ -180,7 +169,7 @@ impl EvalState {
         }
     }
 
-    fn add_piece(&mut self, piece: Piece, square: Square, colour: Colour) {
+    pub fn add_piece(&mut self, piece: Piece, square: Square, colour: Colour) {
         if colour == Colour::White {
             self.pst_mg += PST_MG[piece as usize][square.flip().into_inner() as usize] + MAT_MG[piece as usize];
             self.pst_eg += PST_EG[piece as usize][square.flip().into_inner() as usize] + MAT_EG[piece as usize];
@@ -191,7 +180,7 @@ impl EvalState {
         self.phase += PHASE[piece as usize];
     }
 
-    fn remove_piece(&mut self, piece: Piece, square: Square, colour: Colour) {
+    pub fn remove_piece(&mut self, piece: Piece, square: Square, colour: Colour) {
         if colour == Colour::White {
             self.pst_mg -= PST_MG[piece as usize][square.flip().into_inner() as usize] + MAT_MG[piece as usize];
             self.pst_eg -= PST_EG[piece as usize][square.flip().into_inner() as usize] + MAT_EG[piece as usize];
@@ -202,7 +191,7 @@ impl EvalState {
         self.phase -= PHASE[piece as usize];
     }
 
-    fn move_piece(&mut self, piece: Piece, from_square: Square, to_square: Square, colour: Colour) {
+    pub fn move_piece(&mut self, piece: Piece, from_square: Square, to_square: Square, colour: Colour) {
         if colour == Colour::White {
             self.pst_mg += PST_MG[piece as usize][to_square.flip().into_inner() as usize]
                 - PST_MG[piece as usize][from_square.flip().into_inner() as usize];
@@ -214,47 +203,5 @@ impl EvalState {
             self.pst_eg -=
                 PST_EG[piece as usize][to_square.into_inner() as usize] - PST_EG[piece as usize][from_square.into_inner() as usize];
         }
-    }
-
-    pub fn update_eval(mut self, board: &Board, m: Move) -> Self {
-        let from_piece = board.piece_from_square(m.from).unwrap();
-        match m.kind {
-            MoveType::Normal | MoveType::DoublePush => {
-                self.move_piece(from_piece, m.from, m.dest, board.side());
-            }
-            MoveType::Capture => {
-                let dest_piece = board.piece_from_square(m.dest).unwrap();
-                self.remove_piece(dest_piece, m.dest, !board.side());
-                self.move_piece(from_piece, m.from, m.dest, board.side());
-            }
-            MoveType::Castle => {
-                if m.dest > m.from {
-                    let rook_from = m.dest.east().unwrap();
-                    let rook_dest = m.dest.west().unwrap();
-                    self.move_piece(Piece::Rook, rook_from, rook_dest, board.side());
-                } else {
-                    let rook_from = m.dest.west().unwrap().west().unwrap();
-                    let rook_dest = m.dest.east().unwrap();
-                    self.move_piece(Piece::Rook, rook_from, rook_dest, board.side());
-                }
-                self.move_piece(from_piece, m.from, m.dest, board.side());
-            }
-            MoveType::EnPassant => {
-                let dest_piece = board.ep().unwrap().relative_south(board.side()).unwrap();
-                self.remove_piece(Piece::Pawn, dest_piece, !board.side());
-                self.move_piece(from_piece, m.from, m.dest, board.side());
-            }
-            MoveType::Promotion => {
-                self.remove_piece(Piece::Pawn, m.from, board.side());
-                self.add_piece(m.prom.unwrap(), m.dest, board.side());
-            }
-            MoveType::CapturePromotion => {
-                let dest_piece = board.piece_from_square(m.dest).unwrap();
-                self.remove_piece(dest_piece, m.dest, !board.side());
-                self.remove_piece(Piece::Pawn, m.from, board.side());
-                self.add_piece(m.prom.unwrap(), m.dest, board.side());
-            }
-        }
-        self
     }
 }
