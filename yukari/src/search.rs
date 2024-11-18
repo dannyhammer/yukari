@@ -126,12 +126,6 @@ impl<'a> Search<'a> {
 
             let board = board.make(m, self.zobrist);
 
-            // Pre-empt stand pat by skipping moves with bad evaluation.
-            // One can think of this as delta pruning, with the delta being zero.
-            if board.eval(board.side()) <= alpha {
-                return true;
-            }
-
             let mut child_pv = ArrayVec::new();
             let score = -self.quiesce(&board, -beta, -alpha, &mut child_pv);
 
