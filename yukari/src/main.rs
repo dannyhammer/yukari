@@ -1,10 +1,9 @@
 use std::{
-    io::{self},
-    str::FromStr,
-    time::{Duration, Instant},
+    fs::File, io::{self, BufRead, Write}, str::FromStr, sync::Mutex, time::{Duration, Instant} 
 };
 
 use tinyvec::ArrayVec;
+use rayon::prelude::*;
 use yukari::{
     self, allocate_tt, engine::{TimeControl, TimeMode}, is_repetition_draw, Search, SearchParams, TtEntry
 };
@@ -180,7 +179,6 @@ impl Yukari {
             let start = Instant::now();
             let mut keystack = Vec::new();
             let mut pv = ArrayVec::new();
-            pv.set_len(0);
             let score = s.search_root(&board, 8, &mut pv, &mut keystack);
             let now = Instant::now().duration_since(start);
             print!("10 {score:.2} {} {} ", now.as_millis() / 10, s.nodes() + s.qnodes());
@@ -192,6 +190,45 @@ impl Yukari {
         }
         let now = Instant::now().duration_since(start);
         println!("{nodes} nodes in {:.3}s = {:.0} nodes/s", now.as_secs_f64(), (nodes as f64) / now.as_secs_f64());
+    }
+
+    fn nnue_label(&mut self, tt: &mut [TtEntry]) {
+        let input = File::open("quiescent_positions_with_results").unwrap();
+        let output = File::create("labeled.txt").unwrap();
+        let input = io::BufReader::new(input).lines().map_while(Result::ok).collect::<Vec<_>>();
+        let output = Mutex::new(output);
+
+        input.par_chunks(256).map(|lines| {
+            let tt = allocate_tt(32);
+            let mut corrhist = [[0; 16384]; 2];
+            for line in lines {
+                let mut line = line.split(" ");
+                let board = line.next().unwrap();
+                let stm = line.next().unwrap();
+                let castling = line.next().unwrap();
+                let ep = line.next().unwrap();
+                let result = line.next().unwrap();
+                let fen = [board, stm, castling, ep].join(" ");
+    
+                let board = Board::from_fen(&fen, &self.zobrist).unwrap();
+                let mut s = Search::new(None, &self.zobrist, &tt, &mut corrhist, &self.params);
+                let start = Instant::now();
+                let mut keystack = Vec::new();
+                let mut pv = ArrayVec::new();
+                let score = s.search_root(&board, 6, &mut pv, &mut keystack);
+                let now = Instant::now().duration_since(start);
+                print!("6 {score:.2} {} {} ", now.as_millis() / 10, s.nodes() + s.qnodes());
+                for m in pv {
+                    print!("{m} ");
+                }
+                println!();
+                let score = if stm == "b" { -score } else { score };
+                let result = if result == "1-0" { "1.0" } else if result == "1/2-1/2" { "0.5" } else if result == "0-1" { "0.0" } else { panic!("unknown result {result}"); };
+                let mut output = output.lock().unwrap();
+                writeln!(output, "{fen} | {score} | {result}").unwrap()
+            }
+        })
+        .for_each(|_| ());
     }
 }
 
@@ -208,6 +245,11 @@ fn main() -> io::Result<()> {
     for arg in std::env::args() {
         if arg == "bench" {
             engine.bench(&mut tt);
+            return Ok(());
+        }
+
+        if arg == "label" {
+            engine.nnue_label(&mut tt);
             return Ok(());
         }
     }

@@ -175,6 +175,11 @@ impl<'a> Search<'a> {
         &mut self, board: &Board, mut depth: i32, mut lower_bound: i32, upper_bound: i32,
         pv: &mut ArrayVec<[Move; 32]>, ply: i32, keystack: &mut Vec<u64>,
     ) -> i32 {
+        // Emergency bailout
+        if ply == 100 {
+            return self.eval_with_corrhist(board, board.eval(board.side()));
+        }
+
         // Check extension
         if board.in_check() {
             depth += 1;
