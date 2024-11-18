@@ -1,6 +1,6 @@
 use yukari_movegen::{Board, Colour, Move, MoveType, Piece, Square};
 
-// CREDIT: These tables come from PeSTO by Ronald Friedrich.
+// CREDIT: These tables come from PeSTO by Ronald Friederich.
 
 const MAT_MG: [i32; 6] = [82, 337, 365, 477, 1025, 0];
 
