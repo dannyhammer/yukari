@@ -261,8 +261,7 @@ impl<'a> Search<'a> {
             self.nodes += 1;
 
             let mut child_pv = ArrayVec::new();
-            let parent_board = board;
-            let board = board.make(m, self.zobrist);
+            let child_board = board.make(m, self.zobrist);
             let mut score = 0;
 
             // Push the move to check for repetition draws
@@ -278,10 +277,10 @@ impl<'a> Search<'a> {
 
             loop {
                 if !finding_pv {
-                    score = -self.search(&board, depth - reduction, -lower_bound - 1, -lower_bound, &mut child_pv, ply + 1, keystack);
+                    score = -self.search(&child_board, depth - reduction, -lower_bound - 1, -lower_bound, &mut child_pv, ply + 1, keystack);
                 }
                 if finding_pv || (score > lower_bound && score < upper_bound) {
-                    score = -self.search(&board, depth - reduction, -upper_bound, -lower_bound, &mut child_pv, ply + 1, keystack);
+                    score = -self.search(&child_board, depth - reduction, -upper_bound, -lower_bound, &mut child_pv, ply + 1, keystack);
                 }
             
                 if reduction > 1 && score > lower_bound {
@@ -314,7 +313,7 @@ impl<'a> Search<'a> {
                 let bonus = bonus - (*history as i32) * bonus / HISTORY_MAX;
                 *history += bonus as i16;
 
-                self.write_tt(&board, TtData {
+                self.write_tt(board, TtData {
                     m: best_move,
                     score: upper_bound as i16,
                     flags: TtFlags::Lower,
@@ -322,7 +321,7 @@ impl<'a> Search<'a> {
                 });
 
                 if !board.in_check() && !m.is_capture() && upper_bound >= eval_int {
-                    self.update_corrhist(parent_board, depth, upper_bound - eval_int);
+                    self.update_corrhist(board, depth, upper_bound - eval_int);
                 }
 
                 return upper_bound;
