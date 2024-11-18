@@ -301,17 +301,19 @@ impl<'a> Search<'a> {
                 const HISTORY_MAX: i32 = 16384;
                 let bonus = (self.params.hist_bonus_mul * depth - self.params.hist_bonus_base).clamp(-HISTORY_MAX, HISTORY_MAX);
                 let penalty = (self.params.hist_pen_mul * depth - self.params.hist_pen_base).clamp(-HISTORY_MAX, HISTORY_MAX);
-                for m in moves.into_iter().take(i) {
-                    if m.is_capture() {
-                        continue;
+                if !m.is_capture() {
+                    for m in moves.into_iter().take(i) {
+                        if m.is_capture() {
+                            continue;
+                        }
+                        let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
+                        let bonus = -penalty - (*history as i32) * penalty / HISTORY_MAX;
+                        *history += bonus as i16;
                     }
                     let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
-                    let bonus = -penalty - (*history as i32) * penalty / HISTORY_MAX;
+                    let bonus = bonus - (*history as i32) * bonus / HISTORY_MAX;
                     *history += bonus as i16;
                 }
-                let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
-                let bonus = bonus - (*history as i32) * bonus / HISTORY_MAX;
-                *history += bonus as i16;
 
                 self.write_tt(board, TtData {
                     m: best_move,
