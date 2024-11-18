@@ -4,4 +4,4 @@ pub mod engine;
 mod eval;
 mod search;
 
-pub use search::{is_repetition_draw, Search, TtEntry, allocate_tt};
+pub use search::{is_repetition_draw, Search, SearchParams, TtEntry, allocate_tt};

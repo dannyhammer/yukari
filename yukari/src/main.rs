@@ -6,7 +6,7 @@ use std::{
 
 use tinyvec::ArrayVec;
 use yukari::{
-    self, allocate_tt, engine::{TimeControl, TimeMode}, is_repetition_draw, Search, TtEntry
+    self, allocate_tt, engine::{TimeControl, TimeMode}, is_repetition_draw, Search, SearchParams, TtEntry
 };
 use yukari_movegen::{Board, Move, Piece, Square, Zobrist};
 
@@ -30,6 +30,7 @@ pub struct Yukari {
     zobrist: Zobrist,
     keystack: Vec<u64>,
     corrhist: [[i32; 16384]; 2],
+    params: SearchParams
 }
 
 impl Yukari {
@@ -47,6 +48,7 @@ impl Yukari {
             zobrist,
             keystack: Vec::new(),
             corrhist: [[0; 16384]; 2],
+            params: SearchParams::default(),
         }
     }
 
@@ -87,7 +89,7 @@ impl Yukari {
     pub fn search(&mut self, best_pv: &mut ArrayVec<[Move; 32]>, tt: &mut [TtEntry]) {
         let start = Instant::now();
         let stop_after = start + Duration::from_secs_f32(self.tc.search_time());
-        let mut s = Search::new(Some(stop_after), &self.zobrist, tt, &mut self.corrhist);
+        let mut s = Search::new(Some(stop_after), &self.zobrist, tt, &mut self.corrhist, &self.params);
         // clone another to use inside the loop
         // Use a seperate backing data to record the current move set
         let mut depth = 1;
@@ -174,7 +176,7 @@ impl Yukari {
         for fen in fens {
             let zobrist = Zobrist::new();
             let board = Board::from_fen(fen, &zobrist).unwrap();
-            let mut s = Search::new(None, &zobrist, tt, &mut self.corrhist);
+            let mut s = Search::new(None, &zobrist, tt, &mut self.corrhist, &self.params);
             let start = Instant::now();
             let mut keystack = Vec::new();
             let mut pv = ArrayVec::new();
@@ -243,6 +245,15 @@ fn main() -> io::Result<()> {
                 println!("feature debug=1");
                 // We support hash table allocation sizing.
                 println!("feature memory=1");
+                // Tunables!
+                println!("feature option=\"RfpMarginBase -spin 0 0 100\"");
+                println!("feature option=\"RfpMarginMul -spin 75 0 1000\"");
+                println!("feature option=\"LmrBase -spin 100 0 500\"");
+                println!("feature option=\"LmrMul -spin 500 0 2000\"");
+                println!("feature option=\"HistBonusBase -spin 250 0 500\"");
+                println!("feature option=\"HistBonusMul -spin 300 0 600\"");
+                println!("feature option=\"HistPenaltyBase -spin 250 0 500\"");
+                println!("feature option=\"HistPenaltyMul -spin 300 0 600\"");
                 // Communicate that feature reporting is done
                 println!("feature done=1");
             }
@@ -257,6 +268,21 @@ fn main() -> io::Result<()> {
             "memory" => {
                 let megabytes = args.parse::<usize>().unwrap();
                 tt = allocate_tt(megabytes);
+            }
+            "option" => {
+                let (name, value) = args.split_once("=").unwrap();
+                let value = value.parse::<i32>().unwrap();
+                match name {
+                    "RfpMarginBase" => engine.params.rfp_margin_base = value,
+                    "RfpMarginMul" => engine.params.rfp_margin_mul = value,
+                    "LmrBase" => engine.params.lmr_base = (value as f32) / 100.0,
+                    "LmrMul" => engine.params.lmr_mul = (value as f32) / 1000.0,
+                    "HistBonusBase" => engine.params.hist_bonus_base = value,
+                    "HistBonusMul" => engine.params.hist_bonus_mul = value,
+                    "HistPenaltyBase" => engine.params.hist_pen_base = value,
+                    "HistPenaltyMul" => engine.params.hist_pen_mul = value,
+                    _ => (),
+                }
             }
             // Hard would turn on thinking during opponent's time, easy would turn it off
             // we don't do it, so it's unimportant

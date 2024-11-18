@@ -7,6 +7,24 @@ use crate::eval::EvalState;
 
 const MATE_VALUE: i32 = 10_000;
 
+#[derive(Clone)]
+pub struct SearchParams {
+    pub rfp_margin_base: i32,
+    pub rfp_margin_mul: i32,
+    pub lmr_base: f32,
+    pub lmr_mul: f32,
+    pub hist_bonus_base: i32,
+    pub hist_bonus_mul: i32,
+    pub hist_pen_base: i32,
+    pub hist_pen_mul: i32,
+}
+
+impl Default for SearchParams {
+    fn default() -> Self {
+        Self { rfp_margin_base: 0, rfp_margin_mul: 37, lmr_base: 1.0, lmr_mul: 0.5, hist_bonus_base: 250, hist_bonus_mul: 300, hist_pen_base: 250, hist_pen_mul: 300 }
+    }
+}
+
 // TODO: when 50-move rule is implemented, this can be limited to searching from the last irreversible move.
 #[must_use]
 pub fn is_repetition_draw(keystack: &[u64], hash: u64) -> bool {
@@ -69,12 +87,13 @@ pub struct Search<'a> {
     history: [[i16; 64]; 64],
     tt: &'a [TtEntry],
     corrhist: &'a mut [[i32; 16384]; 2],
+    params: &'a SearchParams,
 }
 
 impl<'a> Search<'a> {
     #[must_use]
-    pub fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist, tt: &'a [TtEntry], corrhist: &'a mut [[i32; 16384]; 2]) -> Self {
-        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64], tt, corrhist }
+    pub fn new(stop_after: Option<Instant>, zobrist: &'a Zobrist, tt: &'a [TtEntry], corrhist: &'a mut [[i32; 16384]; 2], params: &'a SearchParams) -> Self {
+        Self { nodes: 0, qnodes: 0, nullmove_attempts: 0, nullmove_success: 0, stop_after, zobrist, history: [[0; 64]; 64], tt, corrhist, params }
     }
 
     fn update_corrhist(&mut self, board: &Board, depth: i32, diff: i32) {
@@ -196,7 +215,8 @@ impl<'a> Search<'a> {
             }
         }
 
-        if !board.in_check() && depth == 1 && eval_int - 75 >= upper_bound {
+        let rfp_margin = self.params.rfp_margin_base + self.params.rfp_margin_mul * depth;
+        if !board.in_check() && depth == 1 && eval_int - rfp_margin >= upper_bound {
             return upper_bound;
         }
 
@@ -258,7 +278,7 @@ impl<'a> Search<'a> {
             if lower_bound == upper_bound - 1 && depth >= 3 && i >= 4 && !board.in_check() && !m.is_capture() {
                 let depth = (depth as f32).ln();
                 let i = (i as f32).ln();
-                reduction += (depth * i).mul_add(0.5, 1.0) as i32; // credit: adam
+                reduction += (depth * i).mul_add(self.params.lmr_mul, self.params.lmr_base) as i32; // credit: adam
             }
 
             loop {
@@ -285,13 +305,14 @@ impl<'a> Search<'a> {
 
             if score >= upper_bound {
                 const HISTORY_MAX: i32 = 16384;
-                let bonus = (300 * depth - 250).clamp(-HISTORY_MAX, HISTORY_MAX);
+                let bonus = (self.params.hist_bonus_mul * depth - self.params.hist_bonus_base).clamp(-HISTORY_MAX, HISTORY_MAX);
+                let penalty = (self.params.hist_pen_mul * depth - self.params.hist_pen_base).clamp(-HISTORY_MAX, HISTORY_MAX);
                 for m in moves.into_iter().take(i) {
                     if m.is_capture() {
                         continue;
                     }
                     let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
-                    let bonus = -bonus - (*history as i32) * bonus / HISTORY_MAX;
+                    let bonus = -penalty - (*history as i32) * penalty / HISTORY_MAX;
                     *history += bonus as i16;
                 }
                 let history = &mut self.history[m.from.into_inner() as usize][m.dest.into_inner() as usize];
