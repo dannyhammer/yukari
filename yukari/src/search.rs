@@ -297,6 +297,14 @@ impl<'a> Search<'a> {
                 best_score = score;
             }
 
+            if self.nodes.trailing_zeros() >= 10 {
+                if let Some(time) = self.stop_after {
+                    if Instant::now() >= time {
+                        return lower_bound;
+                    }
+                }
+            }
+
             if score >= upper_bound {
                 const HISTORY_MAX: i32 = 16384;
                 let bonus = (self.params.hist_bonus_mul * depth - self.params.hist_bonus_base).clamp(-HISTORY_MAX, HISTORY_MAX);
@@ -327,14 +335,6 @@ impl<'a> Search<'a> {
                 }
 
                 return upper_bound;
-            }
-
-            if self.nodes.trailing_zeros() >= 10 {
-                if let Some(time) = self.stop_after {
-                    if Instant::now() >= time {
-                        return lower_bound;
-                    }
-                }
             }
 
             if score > lower_bound {
